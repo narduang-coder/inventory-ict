@@ -1,0 +1,354 @@
+/* Custom Styles for School Inventory System */
+
+/* Shared EDL brand palette for primary interface accents. */
+.text-indigo-600,
+.text-indigo-500,
+.text-indigo-700,
+.text-indigo-900,
+.text-indigo-100,
+.text-violet-700,
+.text-purple-600,
+.text-purple-700,
+.text-purple-500,
+.text-purple-800,
+.text-purple-900,
+.text-teal-500 {
+    color: #0284c7 !important;
+}
+
+.bg-indigo-50,
+.bg-indigo-100,
+.bg-indigo-600,
+.bg-indigo-500,
+.bg-purple-50,
+.bg-purple-100,
+.bg-purple-600,
+.bg-purple-700,
+.bg-teal-50,
+.bg-teal-600 {
+    background-color: #e0f2fe !important;
+}
+
+.bg-indigo-600,
+.bg-indigo-500,
+.bg-purple-600,
+.bg-purple-700,
+.bg-teal-600 {
+    background-color: #0284c7 !important;
+}
+
+.hover\:bg-indigo-700:hover,
+.hover\:bg-indigo-50:hover,
+.hover\:bg-purple-700:hover,
+.hover\:bg-purple-100:hover,
+.hover\:bg-teal-700:hover {
+    background-color: #0369a1 !important;
+}
+
+.border-indigo-500,
+.border-indigo-200,
+.border-indigo-100,
+.border-indigo-300,
+.border-purple-200,
+.border-purple-300,
+.border-teal-200 {
+    border-color: #bae6fd !important;
+}
+
+.focus\:border-indigo-500:focus,
+.focus\:border-teal-500:focus {
+    border-color: #0284c7 !important;
+}
+
+.focus\:ring-indigo-500:focus,
+.focus\:ring-indigo-100:focus,
+.focus\:ring-teal-500:focus {
+    --tw-ring-color: #0284c7 !important;
+}
+
+.from-indigo-600,
+.from-purple-600,
+.from-violet-700 {
+    --tw-gradient-from: #002B66 !important;
+    --tw-gradient-to: rgb(0 43 102 / 0) !important;
+}
+
+.to-indigo-700,
+.to-purple-600,
+.to-indigo-600,
+.to-blue-500,
+.to-blue-600 {
+    --tw-gradient-to: #0284c7 !important;
+}
+
+/* Loading Spinner */
+.loading-spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(255,255,255,.3);
+    border-radius: 50%;
+    border-top-color: #fff;
+    animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+/* Table Responsive */
+.table-responsive {
+    overflow-x: auto;
+}
+
+/* Badge Styles */
+.badge {
+    display: inline-block;
+    padding: 0.25em 0.6em;
+    font-size: 0.75em;
+    font-weight: 600;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+    vertical-align: baseline;
+    border-radius: 0.375rem;
+}
+
+.badge-success {
+    background-color: #d1fae5;
+    color: #065f46;
+}
+
+.badge-warning {
+    background-color: #fef3c7;
+    color: #92400e;
+}
+
+.badge-danger {
+    background-color: #fee2e2;
+    color: #991b1b;
+}
+
+.badge-info {
+    background-color: #dbeafe;
+    color: #1e40af;
+}
+
+/* Card Hover Effects */
+.card-hover {
+    transition: all 0.3s ease;
+}
+
+.card-hover:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+/* Button Animations */
+.btn-primary {
+    transition: all 0.3s ease;
+}
+
+.btn-primary:hover {
+    transform: translateY(-1px);
+}
+
+/* Modal Backdrop */
+.modal-backdrop {
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+/* Print Styles */
+@media print {
+    .no-print {
+        display: none !important;
+    }
+    
+    .sidebar {
+        display: none !important;
+    }
+    
+    .main-content {
+        margin-left: 0 !important;
+    }
+    
+    body {
+        background: white !important;
+    }
+    
+    .bg-gray-100 {
+        background: white !important;
+    }
+    
+    .shadow {
+        box-shadow: none !important;
+    }
+    
+    .rounded-xl {
+        border-radius: 0 !important;
+    }
+}
+
+/* Responsive Table */
+@media (max-width: 768px) {
+    .table-responsive table {
+        font-size: 0.875rem;
+    }
+    
+    .table-responsive th,
+    .table-responsive td {
+        padding: 0.5rem;
+    }
+}
+
+/* Chart Container */
+.chart-container {
+    position: relative;
+    height: 300px;
+    width: 100%;
+}
+
+/* Form Styles */
+.form-group {
+    margin-bottom: 1rem;
+}
+
+.form-label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    color: #374151;
+}
+
+.form-input {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.375rem;
+    transition: all 0.2s;
+}
+
+.form-input:focus {
+    outline: none;
+    ring: 2px;
+    ring-color: #0284c7;
+    border-color: #0284c7;
+}
+
+/* Alert Styles */
+.alert {
+    padding: 0.75rem 1rem;
+    border-radius: 0.375rem;
+    margin-bottom: 1rem;
+}
+
+.alert-success {
+    background-color: #d1fae5;
+    border: 1px solid #a7f3d0;
+    color: #065f46;
+}
+
+.alert-error {
+    background-color: #fee2e2;
+    border: 1px solid #fecaca;
+    color: #991b1b;
+}
+
+.alert-warning {
+    background-color: #fef3c7;
+    border: 1px solid #fde68a;
+    color: #92400e;
+}
+
+.alert-info {
+    background-color: #dbeafe;
+    border: 1px solid #93c5fd;
+    color: #1e40af;
+}
+
+/* Animation for notifications */
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.notification {
+    animation: slideIn 0.3s ease-out;
+}
+
+/* Custom checkbox and radio */
+.custom-checkbox input[type="checkbox"],
+.custom-radio input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+}
+
+.custom-checkbox .checkmark,
+.custom-radio .checkmark {
+    position: relative;
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    background-color: #fff;
+    border: 2px solid #d1d5db;
+    border-radius: 3px;
+    margin-right: 8px;
+}
+
+.custom-radio .checkmark {
+    border-radius: 50%;
+}
+
+.custom-checkbox input[type="checkbox"]:checked ~ .checkmark,
+.custom-radio input[type="radio"]:checked ~ .checkmark {
+    background-color: #0284c7;
+    border-color: #0284c7;
+}
+
+.custom-checkbox input[type="checkbox"]:checked ~ .checkmark:after {
+    content: "";
+    position: absolute;
+    left: 5px;
+    top: 2px;
+    width: 4px;
+    height: 8px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+.custom-radio input[type="radio"]:checked ~ .checkmark:after {
+    content: "";
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: white;
+}

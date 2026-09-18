@@ -1,0 +1,10 @@
+# Admin PHP endpoints are normally reached through admin.php.
+# Direct access remains blocked except for endpoints that are explicitly
+# designed to be called by the browser and enforce authentication themselves.
+<FilesMatch "^(?!qr_detail\.php$|download_attachment\.php$|upload_attachment\.php$).+\.php$">
+    Require all denied
+</FilesMatch>
+
+<FilesMatch "^(qr_detail|download_attachment|upload_attachment)\.php$">
+    Require all granted
+</FilesMatch>
