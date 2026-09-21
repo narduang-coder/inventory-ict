@@ -279,7 +279,7 @@ if ($page === 'items' && isset($_GET['get_blob'])) {
             background: #f0f4f5;
         }
         .sidebar {
-            background: linear-gradient(180deg, #002B66 0%, #004B99 60%, #0284c7 100%);
+            background: #283593;
             height: 100vh;
             max-height: 100vh;
             width: 260px;
@@ -337,7 +337,7 @@ if ($page === 'items' && isset($_GET['get_blob'])) {
         }
         .main-content {
             margin-left: 260px;
-            padding: 20px;
+            padding: 92px 28px 28px;
             min-height: 100vh;
         }
         .card {

@@ -49,8 +49,9 @@ $popular_items   = function_exists('getPopularItems') ? getPopularItems($pdo) : 
 $top_users       = function_exists('getTopUsers') ? getTopUsers($pdo) : [];
 ?>
 
+<section class="admin-dashboard">
 <!-- Header -->
-<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+<div class="dashboard-hero flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
     <div>
         <h1 class="text-2xl font-bold text-slate-800 flex items-center gap-2">
             <i class="fas fa-chart-pie text-sky-600"></i>
@@ -59,64 +60,64 @@ $top_users       = function_exists('getTopUsers') ? getTopUsers($pdo) : [];
         <p class="text-slate-500 text-sm mt-0.5">ສະຫຼຸບພາບລວມ ແລະ ສະຖິຕິການນຳໃຊ້ລະບົບ</p>
     </div>
     <div class="flex items-center gap-2">
-        <button onclick="window.print()" class="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-medium rounded-xl text-sm shadow-sm transition">
+        <button onclick="window.print()" class="dashboard-print-button inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-medium rounded-xl text-sm shadow-sm transition">
             <i class="fas fa-print text-slate-400"></i> ພິມລາຍງານ
         </button>
     </div>
 </div>
 
 <!-- ສະຖິຕິ Cards Summary -->
-<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+<div class="dashboard-stats grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
     <!-- ອຸປະກອນທັງໝົດ -->
-    <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between transition hover:shadow-md">
+    <div class="dashboard-stat-card dashboard-stat-primary bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between transition hover:shadow-md">
         <div>
             <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">ອຸປະກອນທັງໝົດ</p>
             <h3 class="text-2xl font-bold text-slate-800 mt-1"><?php echo number_format((int)$total_items); ?></h3>
         </div>
-        <div class="p-3 bg-blue-50 text-blue-600 rounded-2xl text-xl">
+        <div class="dashboard-stat-icon p-3 bg-blue-50 text-blue-600 rounded-2xl text-xl">
             <i class="fas fa-boxes-stacked"></i>
         </div>
     </div>
 
     <!-- ລໍຖ້າອະນຸມັດ -->
-    <div class="bg-white p-5 rounded-2xl border border-amber-200/80 shadow-sm flex items-center justify-between transition hover:shadow-md border-l-4 border-l-amber-500">
+    <div class="dashboard-stat-card dashboard-stat-warning bg-white p-5 rounded-2xl border border-amber-200/80 shadow-sm flex items-center justify-between transition hover:shadow-md border-l-4 border-l-amber-500">
         <div>
             <p class="text-xs font-semibold uppercase tracking-wider text-amber-600">ລໍຖ້າອະນຸມັດ</p>
             <h3 class="text-2xl font-bold text-slate-800 mt-1"><?php echo number_format((int)$pending_requests); ?></h3>
             <p class="text-xs text-slate-400 mt-1">ຄຳຂໍທີ່ລໍຖ້າກວດສອບ</p>
         </div>
-        <div class="p-3 bg-amber-50 text-amber-600 rounded-2xl text-xl">
+        <div class="dashboard-stat-icon p-3 bg-amber-50 text-amber-600 rounded-2xl text-xl">
             <i class="fas fa-clock-rotate-left"></i>
         </div>
     </div>
 
     <!-- ອຸປະກອນໃກ້ໝົດ -->
-    <div class="bg-white p-5 rounded-2xl border border-rose-200/80 shadow-sm flex items-center justify-between transition hover:shadow-md border-l-4 border-l-rose-500">
+    <div class="dashboard-stat-card dashboard-stat-danger bg-white p-5 rounded-2xl border border-rose-200/80 shadow-sm flex items-center justify-between transition hover:shadow-md border-l-4 border-l-rose-500">
         <div>
             <p class="text-xs font-semibold uppercase tracking-wider text-rose-600">ອຸປະກອນໃກ້ໝົດ</p>
             <h3 class="text-2xl font-bold text-slate-800 mt-1"><?php echo number_format((int)$low_stock); ?></h3>
             <p class="text-xs text-slate-400 mt-1">ຕ່ຳກວ່າເກນຄາດໝາຍ</p>
         </div>
-        <div class="p-3 bg-rose-50 text-rose-600 rounded-2xl text-xl">
+        <div class="dashboard-stat-icon p-3 bg-rose-50 text-rose-600 rounded-2xl text-xl">
             <i class="fas fa-triangle-exclamation"></i>
         </div>
     </div>
 
     <!-- ຜູ້ໃຊ້ທັງໝົດ -->
-    <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between transition hover:shadow-md">
+    <div class="dashboard-stat-card dashboard-stat-primary bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between transition hover:shadow-md">
         <div>
             <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">ຜູ້ໃຊ້ທັງໝົດ</p>
             <h3 class="text-2xl font-bold text-slate-800 mt-1"><?php echo number_format((int)$total_users); ?></h3>
             <p class="text-xs text-slate-400 mt-1">ບັນຊີໃນລະບົບ</p>
         </div>
-        <div class="p-3 bg-sky-50 text-sky-600 rounded-2xl text-xl">
+        <div class="dashboard-stat-icon p-3 bg-sky-50 text-sky-600 rounded-2xl text-xl">
             <i class="fas fa-users"></i>
         </div>
     </div>
 </div>
 
 <!-- ການດຳເນີນການດ່ວນ Quick Actions -->
-<div class="bg-gradient-to-r from-[#002B66] to-[#0284c7] text-white p-6 rounded-2xl shadow-md mb-8 flex flex-wrap items-center justify-between gap-4">
+<div class="dashboard-quick-actions bg-gradient-to-r from-[#002B66] to-[#0284c7] text-white p-6 rounded-2xl shadow-md mb-8 flex flex-wrap items-center justify-between gap-4">
     <div>
         <h3 class="text-lg font-bold flex items-center gap-2">
             <i class="fas fa-bolt text-yellow-300"></i> ການດຳເນີນການດ່ວນ
@@ -137,11 +138,15 @@ $top_users       = function_exists('getTopUsers') ? getTopUsers($pdo) : [];
 </div>
 
 <!-- ສະຖິຕິລາຍເດືອນ Chart (Full Width) -->
-<div class="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm mb-8">
-    <h3 class="text-base font-bold text-slate-800 mb-4 flex items-center gap-2">
+<div class="dashboard-panel dashboard-chart-panel bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm mb-8">
+    <div class="dashboard-panel-heading flex items-center justify-between gap-4 mb-4">
+        <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
         <i class="fas fa-chart-column text-sky-600"></i> ສະຖິຕິການເບີກລາຍເດືອນ
-    </h3>
-    <div class="h-80">
+        </h3>
+        <span class="dashboard-panel-caption">ສະຫຼຸບ 6 ເດືອນຫຼ້າສຸດ</span>
+    </div>
+    <div class="dashboard-chart-wrap h-80">
+        <div id="monthlyChartState" class="dashboard-chart-state" aria-live="polite">ກຳລັງໂຫຼດຂໍ້ມູນ...</div>
         <canvas id="monthlyChart"></canvas>
     </div>
 </div>
@@ -149,7 +154,7 @@ $top_users       = function_exists('getTopUsers') ? getTopUsers($pdo) : [];
 <!-- ອຸປະກອນຍອດນິຍົມ & ຜູ້ໃຊ້ເບີກຫຼາຍສຸດ -->
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
     <!-- ອຸປະກອນຍອດນິຍົມ -->
-    <div class="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
+    <div class="dashboard-panel bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
         <h3 class="text-base font-bold text-slate-800 mb-4 flex items-center gap-2">
             <i class="fas fa-trophy text-amber-500"></i> ອຸປະກອນຍອດນິຍົມ (Top Items)
         </h3>
@@ -184,7 +189,7 @@ $top_users       = function_exists('getTopUsers') ? getTopUsers($pdo) : [];
     </div>
 
     <!-- ຜູ້ໃຊ້ທີ່ເບີກຫຼາຍທີ່ສຸດ -->
-    <div class="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
+    <div class="dashboard-panel dashboard-activity-panel bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
         <h3 class="text-base font-bold text-slate-800 mb-4 flex items-center gap-2">
             <i class="fas fa-crown text-sky-500"></i> ຜູ້ໃຊ້ທີ່ເບີກຫຼາຍທີ່ສຸດ
         </h3>
@@ -259,7 +264,17 @@ $top_users       = function_exists('getTopUsers') ? getTopUsers($pdo) : [];
             <a href="?admin=requests" class="text-xs font-semibold text-indigo-600 hover:text-indigo-800">ເບິ່ງທັງໝົດ →</a>
         </div>
         <?php if (!empty($recent_requests)): ?>
-            <div class="space-y-2.5">
+            <div class="dashboard-table-wrap table-responsive">
+                <table class="dashboard-activity-table w-full text-left">
+                    <thead>
+                        <tr>
+                            <th>ຜູ້ຂໍ</th>
+                            <th>ຈຸດປະສົງ</th>
+                            <th>ສະຖານະ</th>
+                            <th class="text-right">ວັນທີ</th>
+                        </tr>
+                    </thead>
+                    <tbody>
                 <?php foreach ($recent_requests as $request): 
                     $statusBadge = match($request['status'] ?? '') {
                         'approved' => 'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -272,19 +287,15 @@ $top_users       = function_exists('getTopUsers') ? getTopUsers($pdo) : [];
                         default    => 'ລໍຖ້າອະນຸມັດ'
                     };
                 ?>
-                    <div class="flex items-center justify-between p-3 bg-slate-50/80 rounded-xl border border-slate-100 hover:bg-slate-50 transition">
-                        <div>
-                            <p class="font-semibold text-slate-800 text-sm"><?php echo htmlspecialchars($request['fullname'] ?? ''); ?></p>
-                            <p class="text-xs text-slate-500 line-clamp-1"><?php echo htmlspecialchars($request['purpose'] ?? 'ເບີກອຸປະກອນ'); ?></p>
-                        </div>
-                        <div class="text-right">
-                            <span class="inline-block px-2.5 py-0.5 text-xs font-medium border rounded-md <?php echo $statusBadge; ?>">
-                                <?php echo $statusText; ?>
-                            </span>
-                            <p class="text-[11px] text-slate-400 mt-1"><?php echo function_exists('formatDate') ? formatDate($request['created_at'] ?? '') : substr($request['created_at'] ?? '', 0, 10); ?></p>
-                        </div>
-                    </div>
+                    <tr>
+                        <td class="font-semibold text-slate-800"><?php echo htmlspecialchars($request['fullname'] ?? ''); ?></td>
+                        <td class="max-w-[240px] truncate text-slate-500"><?php echo htmlspecialchars($request['purpose'] ?? 'ເບິກອຸປະກອນ'); ?></td>
+                        <td><span class="dashboard-status-badge inline-block px-2.5 py-0.5 text-xs font-medium border rounded-md <?php echo $statusBadge; ?>"><?php echo $statusText; ?></span></td>
+                        <td class="text-right text-xs text-slate-400"><?php echo function_exists('formatDate') ? formatDate($request['created_at'] ?? '') : substr($request['created_at'] ?? '', 0, 10); ?></td>
+                    </tr>
                 <?php endforeach; ?>
+                    </tbody>
+                </table>
             </div>
         <?php else: ?>
             <div class="text-center py-8 text-slate-400">
@@ -297,34 +308,50 @@ $top_users       = function_exists('getTopUsers') ? getTopUsers($pdo) : [];
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-Chart.defaults.font.family = "'Noto Sans Lao', sans-serif";
+if (typeof Chart !== 'undefined') {
+    Chart.defaults.font.family = "'Noto Sans Lao', sans-serif";
+}
+const monthlyChartState = document.getElementById('monthlyChartState');
+const monthlyChartCanvas = document.getElementById('monthlyChart');
 
 // Monthly Chart
 <?php if (!empty($monthly_stats)): ?>
 const monthlyCtx = document.getElementById('monthlyChart')?.getContext('2d');
-if(monthlyCtx) {
+if(monthlyCtx && typeof Chart !== 'undefined') {
     new Chart(monthlyCtx, {
-        type: 'bar',
+        type: 'line',
         data: {
             labels: <?php echo json_encode(array_map(fn($m) => date('M Y', strtotime(($m['month'] ?? date('Y-m')) . '-01')), $monthly_stats)); ?>,
             datasets: [
                 {
                     label: 'ອະນຸມັດແລ້ວ',
                     data: <?php echo json_encode(array_column($monthly_stats, 'approved')); ?>,
-                    backgroundColor: '#10B981',
-                    borderRadius: 6
+                    borderColor: '#283593',
+                    backgroundColor: 'rgba(40, 53, 147, 0.1)',
+                    fill: true,
+                    tension: 0.35,
+                    pointRadius: 3,
+                    pointHoverRadius: 5
                 },
                 {
                     label: 'ລໍຖ້າອະນຸມັດ',
                     data: <?php echo json_encode(array_column($monthly_stats, 'pending')); ?>,
-                    backgroundColor: '#F59E0B',
-                    borderRadius: 6
+                    borderColor: '#D88900',
+                    backgroundColor: 'rgba(216, 137, 0, 0.08)',
+                    fill: true,
+                    tension: 0.35,
+                    pointRadius: 3,
+                    pointHoverRadius: 5
                 },
                 {
                     label: 'ປະຕິເສດ',
                     data: <?php echo json_encode(array_column($monthly_stats, 'rejected')); ?>,
-                    backgroundColor: '#EF4444',
-                    borderRadius: 6
+                    borderColor: '#C94A58',
+                    backgroundColor: 'rgba(201, 74, 88, 0.08)',
+                    fill: true,
+                    tension: 0.35,
+                    pointRadius: 3,
+                    pointHoverRadius: 5
                 }
             ]
         },
@@ -335,10 +362,19 @@ if(monthlyCtx) {
                 legend: { position: 'bottom' }
             },
             scales: {
-                y: { beginAtZero: true }
+                y: { beginAtZero: true, grid: { color: '#E8EAF2' } },
+                x: { grid: { display: false } }
             }
         }
     });
+    monthlyChartState?.classList.add('is-hidden');
+} else if (monthlyChartState) {
+    monthlyChartState.textContent = 'ບໍ່ສາມາດໂຫຼດກາຟໄດ້ ກະລຸນາລອງໃໝ່';
+    monthlyChartState.classList.add('is-error');
 }
+<?php else: ?>
+if (monthlyChartCanvas) monthlyChartCanvas.classList.add('is-hidden');
+if (monthlyChartState) monthlyChartState.textContent = 'ຍັງບໍ່ມີຂໍ້ມູນສະຖິຕິລາຍເດືອນ';
 <?php endif; ?>
 </script>
+</section>

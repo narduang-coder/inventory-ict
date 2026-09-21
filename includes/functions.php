@@ -123,16 +123,47 @@ function getLowStockCount($pdo) {
     }
 }
 
-function assetPath($path) {
-    if (empty($path)) return '';
+function normalizeLogoAssetPath($path) {
+    if (empty($path)) {
+        return '';
+    }
+
     $normalized = ltrim(str_replace('\\', '/', (string)$path), '/');
+    if ($normalized === '') {
+        return '';
+    }
+
+    if (preg_match('#^[a-z][a-z0-9+.-]*:#i', $normalized) || str_contains($normalized, '..')) {
+        return '';
+    }
+
+    $basename = basename($normalized);
+    if ($basename === '' || $basename === '.' || $basename === '..') {
+        return '';
+    }
+
+    if (str_contains($normalized, 'uploads/') || str_contains($normalized, 'logos/') || preg_match('#^logo_[^/]+$#i', $basename) || preg_match('#\.(jpe?g|png|gif|webp)$#i', $basename)) {
+        return 'assets/uploads/logos/' . $basename;
+    }
+
+    return $normalized;
+}
+
+function assetPath($path) {
+    $normalized = normalizeLogoAssetPath($path);
+    if ($normalized === '') {
+        $normalized = ltrim(str_replace('\\', '/', (string) $path), '/');
+        if ($normalized === '') {
+            return '';
+        }
+        if (preg_match('/^[A-Za-z]:/', $normalized)) return '';
+        if (str_contains($normalized, '../') || str_contains($normalized, '..\\')) return '';
+    }
+
+    if ($normalized === '') return '';
     if (preg_match('/^[A-Za-z]:/', $normalized)) return '';
     if (str_contains($normalized, '../') || str_contains($normalized, '..\\')) return '';
-    if (preg_match('#^uploads/logo_[^/]+$#', $normalized)) {
-        $normalized = 'assets/uploads/logos/' . basename($normalized);
-    } elseif (str_starts_with($normalized, 'uploads/')) {
-        $normalized = 'assets/' . $normalized;
-    }
+
     $candidate = BASE_PATH . str_replace('/', DIRECTORY_SEPARATOR, $normalized);
     $base = realpath(BASE_PATH);
     $dir = realpath(dirname($candidate));
@@ -141,19 +172,11 @@ function assetPath($path) {
 }
 
 function assetUrl($path) {
-    if (empty($path)) {
+    $normalized = normalizeLogoAssetPath($path);
+    if ($normalized === '') {
         return '';
     }
-    $normalized = ltrim(str_replace('\\', '/', (string)$path), '/');
-    // Only allow application-relative asset paths. Never turn a stored value into
-    // an arbitrary javascript:, data:, or external URL.
-    if (preg_match('#^[a-z][a-z0-9+.-]*:#i', $normalized) || str_contains($normalized, '..')) {
-        return '';
-    }
-    if (preg_match('#^uploads/logo_[^/]+$#', $normalized)) {
-        return 'assets/uploads/logos/' . basename($normalized);
-    }
-    return str_starts_with($normalized, 'uploads/') ? 'assets/' . $normalized : $normalized;
+    return $normalized;
 }
 
 function safeErrorMessage(Throwable $e): string

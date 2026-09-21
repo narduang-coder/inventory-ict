@@ -16,8 +16,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     
     if (isset($_POST['update_settings'])) {
         $school_name = $_POST['school_name'];
-        $logo_path = $_POST['current_logo'] ?? '';
-        
+        $logo_path = normalizeLogoAssetPath($_POST['current_logo'] ?? '');
+
         // ອັບໂຫຼດໂລໂກ້
         if (isset($_FILES['logo']) && $_FILES['logo']['error'] === UPLOAD_ERR_OK && is_uploaded_file($_FILES['logo']['tmp_name'])) {
             $upload_dir = UPLOAD_PATH . 'logos' . DIRECTORY_SEPARATOR;
@@ -28,21 +28,24 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $finfo = finfo_open(FILEINFO_MIME_TYPE);
             $mime = finfo_file($finfo, $_FILES['logo']['tmp_name']) ?: '';
             finfo_close($finfo);
-            $allowedMime = ['jpg'=>'image/jpeg','jpeg'=>'image/jpeg','png'=>'image/png','gif'=>'image/gif'];
-            $allowed = ['jpg', 'jpeg', 'png', 'gif'];
+            $allowedMime = ['jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png' => 'image/png', 'gif' => 'image/gif', 'webp' => 'image/webp'];
+            $allowed = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
             if (in_array($ext, $allowed, true) && isset($allowedMime[$ext]) && $mime === $allowedMime[$ext] && $_FILES['logo']['size'] <= 2 * 1024 * 1024) {
                 // ລຶບໂລໂກ້ເກົ່າ
-                if (!empty($logo_path) && file_exists(assetPath($logo_path))) {
-                    unlink(assetPath($logo_path));
+                if (!empty($logo_path)) {
+                    $oldLogoPath = assetPath($logo_path);
+                    if ($oldLogoPath !== '' && file_exists($oldLogoPath)) {
+                        unlink($oldLogoPath);
+                    }
                 }
                 $filename = 'logo_' . bin2hex(random_bytes(12)) . '.' . $ext;
                 $target = $upload_dir . $filename;
                 if (move_uploaded_file($_FILES['logo']['tmp_name'], $target)) {
-                    $logo_path = 'assets/uploads/logos/' . $filename;
+                    $logo_path = normalizeLogoAssetPath('assets/uploads/logos/' . $filename);
                 }
             }
         }
-        
+
         try {
             $stmt = $pdo->prepare("UPDATE settings SET school_name = ?, logo_path = ?");
             $stmt->execute([$school_name, $logo_path]);
