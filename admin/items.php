@@ -275,8 +275,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (isset($pdo) && $pdo->inTransaction()) {
                 rollbackItemTransaction($pdo);
             }
-            error_log('Admin Items PDO Error: ' . $e->getMessage());
-            showAlert('ເກີດຂໍ້ຜິດພາດ ກະລຸນາລອງໃໝ່: ' . $e->getMessage(), 'error');
+            error_log('Admin Items Error [' . get_class($e) . ']: ' . $e->getMessage());
+            $userMessage = ($e instanceof RuntimeException)
+                ? $e->getMessage()
+                : 'ເກີດຂໍ້ຜິດພາດ ກະລຸນາລອງໃໝ່';
+            showAlert($userMessage, 'error');
         }
         echo '<script>window.location.href = "?admin=items";</script>';
         exit();
@@ -368,8 +371,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (isset($pdo) && $pdo->inTransaction()) {
                 rollbackItemTransaction($pdo);
             }
-            error_log('Admin Items PDO Error: ' . $e->getMessage());
-            showAlert('ເກີດຂໍ້ຜິດພາດ ກະລຸນາລອງໃໝ່', 'error');
+            error_log('Admin Items Error [' . get_class($e) . ']: ' . $e->getMessage());
+            $userMessage = ($e instanceof RuntimeException)
+                ? $e->getMessage()
+                : 'ເກີດຂໍ້ຜິດພາດ ກະລຸນາລອງໃໝ່';
+            showAlert($userMessage, 'error');
         }
         echo '<script>window.location.href = "?admin=items";</script>';
         exit();
@@ -476,12 +482,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->commit();
                 showAlert('ແກ້ໄຂອຸປະກອນສຳເລັດ', 'success');
             }
-        } catch (PDOException $e) {
+        } catch (Throwable $e) {
             if (isset($pdo) && $pdo->inTransaction()) {
                 rollbackItemTransaction($pdo);
             }
-            error_log('Admin Items PDO Error: ' . $e->getMessage());
-            showAlert('ເກີດຂໍ້ຜິດພາດ ກະລຸນາລອງໃໝ່', 'error');
+            error_log('Admin Items Error [' . get_class($e) . ']: ' . $e->getMessage());
+            $userMessage = ($e instanceof RuntimeException)
+                ? $e->getMessage()
+                : 'ເກີດຂໍ້ຜິດພາດ ກະລຸນາລອງໃໝ່';
+            showAlert($userMessage, 'error');
         }
         echo '<script>window.location.href = "?admin=items";</script>';
         exit();
@@ -518,7 +527,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $pdo->commit();
                     showAlert("ເພີ່ມສະຕັອກອຸປະກອນສຳເລັດ (+{$add_qty})", 'success');
                 }
-            } catch (PDOException $e) {
+            } catch (Throwable $e) {
                 if (isset($pdo) && $pdo->inTransaction()) {
                     rollbackItemTransaction($pdo);
                 }
@@ -565,12 +574,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     showAlert('ບໍ່ພົບຂໍ້ມູນອຸປະກອນທີ່ຈະຈຳໜ່າຍ', 'error');
                 }
             }
-        } catch (PDOException $e) {
+        } catch (Throwable $e) {
             if (isset($pdo) && $pdo->inTransaction()) {
                 rollbackItemTransaction($pdo);
             }
-            error_log('Admin Items PDO Error: ' . $e->getMessage());
-            showAlert('ເກີດຂໍ້ຜິດພາດ ກະລຸນາລອງໃໝ່', 'error');
+            error_log('Admin Items Error [' . get_class($e) . ']: ' . $e->getMessage());
+            $userMessage = ($e instanceof RuntimeException)
+                ? $e->getMessage()
+                : 'ເກີດຂໍ້ຜິດພາດ ກະລຸນາລອງໃໝ່';
+            showAlert($userMessage, 'error');
         }
         echo '<script>window.location.href = "?admin=items";</script>';
         exit();
@@ -604,7 +616,7 @@ if (isset($pdo)) {
             $qty = (int)($itm['quantity'] ?? 0);
             $total_usable_stock += $qty;
         }
-    } catch (PDOException $e) {
+    } catch (Throwable $e) {
         error_log('Admin Items PDO Error: ' . $e->getMessage());
         showAlert('ເກີດຂໍ້ຜິດພາດ ກະລຸນາລອງໃໝ່', 'error');
     }
