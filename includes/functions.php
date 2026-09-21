@@ -176,7 +176,8 @@ function assetUrl($path) {
     if ($normalized === '') {
         return '';
     }
-    return $normalized;
+
+    return rtrim(APP_BASE_URL, '/') . '/' . $normalized;
 }
 
 function safeErrorMessage(Throwable $e): string
