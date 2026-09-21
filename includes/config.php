@@ -59,7 +59,8 @@ define('APP_DEBUG', filter_var(getenv('APP_DEBUG') ?: 'false', FILTER_VALIDATE_B
 
 $configuredBaseUrl = getenv('APP_BASE_URL');
 if ($configuredBaseUrl === false || trim($configuredBaseUrl) === '') {
-    $configuredBaseUrl = (APP_ENV === 'local' || APP_ENV === 'development') ? '/edl-inven' : '';
+    $scriptName = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
+    $configuredBaseUrl = preg_replace('#/[^/]*$#', '', $scriptName) ?: '';
 }
 define('APP_BASE_URL', rtrim('/' . ltrim(trim($configuredBaseUrl), '/'), '/'));
 

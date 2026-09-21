@@ -15,8 +15,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     }
     
     if (isset($_POST['update_settings'])) {
-        $school_name = $_POST['school_name'];
+        $school_name = trim($_POST['school_name'] ?? '');
         $logo_path = normalizeLogoAssetPath($_POST['current_logo'] ?? '');
+        $uploadError = '';
 
         // ອັບໂຫຼດໂລໂກ້
         if (isset($_FILES['logo']) && $_FILES['logo']['error'] === UPLOAD_ERR_OK && is_uploaded_file($_FILES['logo']['tmp_name'])) {
@@ -32,24 +33,28 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $allowed = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
             if (in_array($ext, $allowed, true) && isset($allowedMime[$ext]) && $mime === $allowedMime[$ext] && $_FILES['logo']['size'] <= 2 * 1024 * 1024) {
                 // ລຶບໂລໂກ້ເກົ່າ
-                if (!empty($logo_path)) {
-                    $oldLogoPath = assetPath($logo_path);
-                    if ($oldLogoPath !== '' && file_exists($oldLogoPath)) {
-                        unlink($oldLogoPath);
-                    }
-                }
                 $filename = 'logo_' . bin2hex(random_bytes(12)) . '.' . $ext;
                 $target = $upload_dir . $filename;
                 if (move_uploaded_file($_FILES['logo']['tmp_name'], $target)) {
+                    $oldLogoPath = assetPath($logo_path);
                     $logo_path = normalizeLogoAssetPath('assets/uploads/logos/' . $filename);
+                    if ($oldLogoPath !== '' && file_exists($oldLogoPath) && realpath($oldLogoPath) !== realpath($target)) {
+                        unlink($oldLogoPath);
+                    }
+                } else {
+                    $uploadError = 'ບໍ່ສາມາດບັນທຶກໄຟລ໌ໂລໂກ້ໄດ້ ກະລຸນາກວດສິດການຂຽນໂຟນເດີ uploads';
                 }
+            } else {
+                $uploadError = 'ຮູບໂລໂກ້ບໍ່ຖືກຕ້ອງ ຫຼື ມີຂະໜາດເກີນ 2MB';
             }
+        } elseif (isset($_FILES['logo']) && $_FILES['logo']['error'] !== UPLOAD_ERR_NO_FILE) {
+            $uploadError = 'ການອັບໂຫຼດໂລໂກ້ລົ້ມເຫຼວ';
         }
 
         try {
             $stmt = $pdo->prepare("UPDATE settings SET school_name = ?, logo_path = ?");
             $stmt->execute([$school_name, $logo_path]);
-            showAlert('ບັນທຶກການຕັ້ງຄ່າສຳເລັດ', 'success');
+            showAlert($uploadError === '' ? 'ບັນທຶກການຕັ້ງຄ່າສຳເລັດ' : $uploadError, $uploadError === '' ? 'success' : 'error');
             logActivity("ອັບເດດການຕັ້ງຄ່າລະບົບ");
         } catch (PDOException $e) {
             error_log($e->getMessage());

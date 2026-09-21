@@ -177,7 +177,14 @@ function assetUrl($path) {
         return '';
     }
 
-    return rtrim(APP_BASE_URL, '/') . '/' . $normalized;
+    $url = rtrim(APP_BASE_URL, '/') . '/' . $normalized;
+    if (str_starts_with($normalized, 'assets/uploads/logos/')) {
+        $file = assetPath($normalized);
+        if ($file !== '' && is_file($file)) {
+            $url .= '?v=' . (string) filemtime($file);
+        }
+    }
+    return $url;
 }
 
 function resolveLogoAssetPath($path): string {
