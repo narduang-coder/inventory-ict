@@ -59,8 +59,9 @@ function qrDetailValue(array $item, string $key, string $fallback = '-'): string
 <body class="min-h-screen p-4 sm:p-8">
     <main class="mx-auto max-w-2xl">
         <header class="mb-6 flex items-center gap-3">
-            <?php if (!empty($school['logo_path']) && is_file(assetPath($school['logo_path']))): ?>
-                <img src="<?php echo htmlspecialchars(assetUrl($school['logo_path'])); ?>" alt="Logo" class="h-12 w-12 rounded-xl object-contain bg-white p-1 shadow-sm">
+            <?php $logoAsset = resolveLogoAssetPath($school['logo_path'] ?? ''); ?>
+            <?php if ($logoAsset !== ''): ?>
+                <img src="<?php echo htmlspecialchars(assetUrl($logoAsset)); ?>" alt="Logo" class="h-12 w-12 rounded-xl object-contain bg-white p-1 shadow-sm">
             <?php endif; ?>
             <div>
                 <p class="text-xs font-semibold uppercase tracking-wide text-indigo-600">QR Inventory Detail</p>

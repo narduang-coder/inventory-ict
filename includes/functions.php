@@ -180,6 +180,22 @@ function assetUrl($path) {
     return rtrim(APP_BASE_URL, '/') . '/' . $normalized;
 }
 
+function resolveLogoAssetPath($path): string {
+    $normalized = normalizeLogoAssetPath($path);
+    if ($normalized !== '' && is_file(assetPath($normalized))) {
+        return $normalized;
+    }
+
+    $logoDirectory = UPLOAD_PATH . 'logos' . DIRECTORY_SEPARATOR;
+    $fallbacks = glob($logoDirectory . 'logo_*.*') ?: [];
+    if ($fallbacks === []) {
+        return '';
+    }
+
+    usort($fallbacks, static fn($left, $right) => filemtime($right) <=> filemtime($left));
+    return 'assets/uploads/logos/' . basename($fallbacks[0]);
+}
+
 function safeErrorMessage(Throwable $e): string
 {
     error_log($e->getMessage() . "\n" . $e->getTraceAsString());

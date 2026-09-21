@@ -128,8 +128,9 @@ $school = $stmt->fetch();
 <body>
     <div class="sidebar" id="sidebar">
         <div class="p-6 text-center border-b border-white/10">
-            <?php if ($school && !empty($school['logo_path']) && file_exists(assetPath($school['logo_path']))): ?>
-                <img src="<?php echo htmlspecialchars(assetUrl($school['logo_path'])); ?>" alt="Logo" class="h-16 mx-auto mb-3 object-contain shadow-md">
+            <?php $logoAsset = resolveLogoAssetPath($school['logo_path'] ?? ''); ?>
+            <?php if ($logoAsset !== ''): ?>
+                <img src="<?php echo htmlspecialchars(assetUrl($logoAsset)); ?>" alt="Logo" class="h-16 mx-auto mb-3 object-contain shadow-md">
             <?php endif; ?>
             <h1 class="text-lg font-bold text-white tracking-wide"><?php echo $school ? htmlspecialchars($school['school_name'], ENT_QUOTES, 'UTF-8') : 'ຝ່າຍ ICT'; ?></h1>
             <p class="text-xs text-sky-200 mt-1">ລະບົບຄຸ້ມຄອງສາງອຸປະກອນ</p>

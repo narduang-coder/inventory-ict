@@ -138,8 +138,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <body>
     <div class="login-card">
         <div class="login-header">
-            <?php if ($school && !empty($school['logo_path']) && file_exists(assetPath($school['logo_path']))): ?>
-                <img src="<?php echo htmlspecialchars(assetUrl($school['logo_path'])); ?>" alt="Logo" class="h-20 mx-auto mb-4 object-contain">
+            <?php $logoAsset = resolveLogoAssetPath($school['logo_path'] ?? ''); ?>
+            <?php if ($logoAsset !== ''): ?>
+                <img src="<?php echo htmlspecialchars(assetUrl($logoAsset)); ?>" alt="Logo" class="h-20 mx-auto mb-4 object-contain">
             <?php else: ?>
                 <div class="text-6xl mb-4"></div>
             <?php endif; ?>

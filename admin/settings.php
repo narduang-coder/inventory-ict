@@ -186,8 +186,9 @@ if ($alert): ?>
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">ໂລໂກ້</label>
                 <div class="flex items-center gap-4">
-                    <?php if (!empty($settings['logo_path']) && file_exists(assetPath($settings['logo_path']))): ?>
-                        <img id="logoPreview" src="<?php echo htmlspecialchars(assetUrl($settings['logo_path'])); ?>" class="h-16 w-16 object-cover rounded-lg border">
+                    <?php $logoAsset = resolveLogoAssetPath($settings['logo_path'] ?? ''); ?>
+                    <?php if ($logoAsset !== ''): ?>
+                        <img id="logoPreview" src="<?php echo htmlspecialchars(assetUrl($logoAsset)); ?>" class="h-16 w-16 object-cover rounded-lg border">
                     <?php else: ?>
                         <div id="logoPlaceholder" class="h-16 w-16 bg-gray-200 rounded-lg flex items-center justify-center">
                             <i class="fas fa-image text-gray-400 text-2xl"></i>

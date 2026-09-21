@@ -416,8 +416,9 @@ if ($page === 'items' && isset($_GET['get_blob'])) {
 <body>
     <div class="sidebar" id="sidebar">
         <div class="p-6 text-center border-b border-white/10 shrink-0">
-            <?php if ($school && !empty($school['logo_path']) && file_exists(assetPath($school['logo_path']))): ?>
-                <img src="<?php echo htmlspecialchars(assetUrl($school['logo_path'])); ?>" alt="Logo" class="h-16 mx-auto mb-3 object-contain">
+            <?php $logoAsset = resolveLogoAssetPath($school['logo_path'] ?? ''); ?>
+            <?php if ($logoAsset !== ''): ?>
+                <img src="<?php echo htmlspecialchars(assetUrl($logoAsset)); ?>" alt="Logo" class="h-16 mx-auto mb-3 object-contain">
             <?php endif; ?>
             <h1 class="text-xl font-bold text-white"><?php echo $school ? htmlspecialchars($school['school_name']) : 'ຝ່າຍ ICT'; ?></h1>
             <p class="text-sm text-white/60">ລະບົບຄຸ້ມຄອງສາງ</p>
