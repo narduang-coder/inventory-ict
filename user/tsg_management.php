@@ -10,7 +10,7 @@ $message = '';
 $message_type = '';
 
 // ============================================================
-// 1. PROCESS: ສ້າງຂໍ້ມູນ ທສກ (department_assets)
+// 1. PROCESS: ສ້າງຂໍ້ມູນ ຊຄທ (department_assets)
 // ============================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'create_tsg') {
     requirePostCsrf();
@@ -23,7 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $message = "ກະລຸນາເລືອກປະເພດອຸປະກອນ ແລະ ລາຍການອຸປະກອນໃຫ້ຄົບຖ້ວນ!";
         $message_type = "warning";
     } elseif (empty($asset_code) || $create_qty <= 0) {
-        $message = "ກະລຸນາປ້ອນລະຫັດ ທສກ ແລະ ຈຳນວນໃຫ້ຄົບຖ້ວນ!";
+        $message = "ກະລຸນາປ້ອນລະຫັດ ຊຄທ ແລະ ຈຳນວນໃຫ້ຄົບຖ້ວນ!";
         $message_type = "warning";
     } else {
         try {
@@ -44,7 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             
             if (!$reqStmt->fetch()) {
                 $pdo->rollBack();
-                $message = "ບໍ່ສາມາດສ້າງ ທສກ ຈາກລາຍການຮ້ອງຂໍນີ້ໄດ້ (ຂໍ້ມູນບໍ່ຖືກຕ້ອງ ຫຼື ຂ້າມຂັ້ນຕອນ)";
+                $message = "ບໍ່ສາມາດສ້າງ ຊຄທ ຈາກລາຍການຮ້ອງຂໍນີ້ໄດ້ (ຂໍ້ມູນບໍ່ຖືກຕ້ອງ ຫຼື ຂ້າມຂັ້ນຕອນ)";
                 $message_type = "warning";
             } else {
                 $availStmt = $pdo->prepare("
@@ -85,11 +85,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
                 if ($available_for_asset <= 0) {
                     $pdo->rollBack();
-                    $message = "ອຸປະກອນນີ້ຖືກສ້າງ ທສກ ຄົບຕາມຈຳນວນທີ່ມີໃນພະແນກແລ້ວ! (ບໍ່ມີຈຳນວນເຫຼືອໃຫ້ສ້າງ)";
+                    $message = "ອຸປະກອນນີ້ຖືກສ້າງ ຊຄທ ຄົບຕາມຈຳນວນທີ່ມີໃນພະແນກແລ້ວ! (ບໍ່ມີຈຳນວນເຫຼືອໃຫ້ສ້າງ)";
                     $message_type = "warning";
                 } elseif ($create_qty > $available_for_asset) {
                     $pdo->rollBack();
-                    $message = "ຈຳນວນທີ່ຕ້ອງການສ້າງ ({$create_qty}) ເກີນຈຳນວນຄົງເຫຼືອທີ່ສາມາດສ້າງ ທສກ ໄດ້ (ເຫຼືອສ້າງໄດ້: {$available_for_asset})";
+                    $message = "ຈຳນວນທີ່ຕ້ອງການສ້າງ ({$create_qty}) ເກີນຈຳນວນຄົງເຫຼືອທີ່ສາມາດສ້າງ ຊຄທ ໄດ້ (ເຫຼືອສ້າງໄດ້: {$available_for_asset})";
                     $message_type = "warning";
                 } else {
                     $chkCode = $pdo->prepare("SELECT COUNT(*) FROM department_assets WHERE asset_code = ?");
@@ -97,7 +97,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     
                     if ($chkCode->fetchColumn() > 0) {
                         $pdo->rollBack();
-                        $message = "ລະຫັດ ທສກ ({$asset_code}) ນີ້ມີໃນລະບົບແລ້ວ!";
+                        $message = "ລະຫັດ ຊຄທ ({$asset_code}) ນີ້ມີໃນລະບົບແລ້ວ!";
                         $message_type = "warning";
                     } else {
                         $stmt = $pdo->prepare("
@@ -115,7 +115,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         $updIssuance->execute([$asset_code, $item_id, $user_department]);
 
                         $pdo->commit();
-                        $message = "ເພີ່ມຂໍ້ມູນ ທສກ ສຳເລັດແລ້ວ! (ລະຫັດ: {$asset_code})";
+                        $message = "ເພີ່ມຂໍ້ມູນ ຊຄທ ສຳເລັດແລ້ວ! (ລະຫັດ: {$asset_code})";
                         $message_type = "success";
                     }
                 }
@@ -144,7 +144,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $note        = trim($_POST['note'] ?? '');
 
     if ($asset_id <= 0) {
-        $message = "ກະລຸນາເລືອກປະເພດ ແລະ ອຸປະກອນ ທສກ ທີ່ຕ້ອງການດໍາເນີນການ!";
+        $message = "ກະລຸນາເລືອກປະເພດ ແລະ ອຸປະກອນ ຊຄທ ທີ່ຕ້ອງການດໍາເນີນການ!";
         $message_type = "warning";
     } elseif ($quantity <= 0) {
         $message = "ກະລຸນາປ້ອນຈຳນວນທີ່ຕ້ອງການນຳໃຊ້/ຍົກຍ້າຍ ໃຫ້ຖືກຕ້ອງ!";
@@ -168,7 +168,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
             if (!$assetData) {
                 $pdo->rollBack();
-                $message = "ບໍ່ພົບຂໍ້ມູນ ທສກ ນີ້ໃນພະແນກ!";
+                $message = "ບໍ່ພົບຂໍ້ມູນ ຊຄທ ນີ້ໃນພະແນກ!";
                 $message_type = "error";
             } else {
                 $asset_current_qty = (int)$assetData['current_qty'];
@@ -176,11 +176,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 // 2. ກວດສອບຍອດ ຄົົງເຫຼືອຂອງ asset_code / item ນີ້
                 if ($asset_current_qty <= 0) {
                     $pdo->rollBack();
-                    $message = "ອຸປະກອນ ທສກ ລະຫັດ ({$assetData['asset_code']}) ນີ້ໝົດແລ້ວ! ບໍ່ສາມາດເຄື່ອນຍ້າຍ/ນຳໃຊ້ໄດ້";
+                    $message = "ອຸປະກອນ ຊຄທ ລະຫັດ ({$assetData['asset_code']}) ນີ້ໝົດແລ້ວ! ບໍ່ສາມາດເຄື່ອນຍ້າຍ/ນຳໃຊ້ໄດ້";
                     $message_type = "warning";
                 } elseif ($quantity > $asset_current_qty) {
                     $pdo->rollBack();
-                    $message = "ຈຳນວນທີ່ລະບຸ ({$quantity}) ເກີນຈຳນວນຄົງເຫຼືອຂອງ ທສກ ນີ້ (ເຫຼືອຢູ່: {$asset_current_qty})";
+                    $message = "ຈຳນວນທີ່ລະບຸ ({$quantity}) ເກີນຈຳນວນຄົງເຫຼືອຂອງ ຊຄທ ນີ້ (ເຫຼືອຢູ່: {$asset_current_qty})";
                     $message_type = "warning";
                 } else {
                     // 3. ບັນທຶກປະຫວັດການເຄື່ອນຍ້າຍ/ນຳໃຊ້
@@ -342,10 +342,10 @@ try {
         </span>
         <div>
             <h1 class="text-xl font-bold text-slate-800">
-                ຄຸ້ມຄອງ ທສກ ປະຈຳພະແນກ 
+                ຄຸ້ມຄອງ ຊຄທ ປະຈຳພະແນກ 
                 <span class="text-sky-600 font-semibold">(<?php echo htmlspecialchars($user_department); ?>)</span>
             </h1>
-            <p class="text-slate-500 text-xs mt-0.5">ເພີ່ມຂໍ້ມູນ ທສກ, ລາຍງານ Admin ພ້ອມບັນທຶກ Process ຍົກຍ້າຍ/ນຳໃຊ້</p>
+            <p class="text-slate-500 text-xs mt-0.5">ເພີ່ມຂໍ້ມູນ ຊຄທ, ລາຍງານ Admin ພ້ອມບັນທຶກ Process ຍົກຍ້າຍ/ນຳໃຊ້</p>
         </div>
     </div>
 </div>
@@ -373,7 +373,7 @@ try {
         <div>
             <div class="flex items-center gap-2 pb-3 mb-4 border-b border-slate-100">
                 <i class="fas fa-folder-plus text-[#002B66] text-lg"></i>
-                <h3 class="text-base font-bold text-slate-800">1. ສ້າງຂໍ້ມູນ ທສກ</h3>
+                <h3 class="text-base font-bold text-slate-800">1. ສ້າງຂໍ້ມູນ ຊຄທ</h3>
             </div>
 
             <form action="" method="POST" onsubmit="return validateCreateTsg()" class="space-y-4">
@@ -401,17 +401,17 @@ try {
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-xs font-semibold text-slate-600 mb-1.5 uppercase">ຈຳນວນທີ່ສ້າງ ທສກ ຄັ້ງນີ້ *</label>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1.5 uppercase">ຈຳນວນທີ່ສ້າງ ຊຄທ ຄັ້ງນີ້ *</label>
                         <input type="number" id="tsg_quantity" name="quantity" min="1" value="1" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-sky-500 transition-all font-semibold text-slate-800">
                     </div>
                     <div>
-                        <label class="block text-xs font-semibold text-slate-600 mb-1.5 uppercase">ກຳນົດ(ລະຫັດ ທສກ) *</label>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1.5 uppercase">ກຳນົດ(ລະຫັດ ຊຄທ) *</label>
                         <input type="text" id="asset_code_input" name="asset_code" placeholder="ເຊັ່ນ: TSG-<?php echo htmlspecialchars(strtoupper($user_department ?: 'EDL')); ?>-001" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-sky-500 transition-all font-mono">
                     </div>
                 </div>
 
                 <button type="submit" class="w-full bg-gradient-to-r from-[#002B66] to-[#004B99] hover:from-[#001d45] hover:to-[#003875] text-white font-semibold py-2.5 px-4 rounded-xl transition-all shadow-md flex items-center justify-center gap-2 text-sm mt-2">
-                    <i class="fas fa-plus-circle"></i> ບັນທຶກສ້າງ ທສກ
+                    <i class="fas fa-plus-circle"></i> ບັນທຶກສ້າງ ຊຄທ
                 </button>
             </form>
         </div>
@@ -422,7 +422,7 @@ try {
         <div>
             <div class="flex items-center gap-2 pb-3 mb-4 border-b border-slate-100">
                 <i class="fas fa-people-carry-box text-amber-500 text-lg"></i>
-                <h3 class="text-base font-bold text-slate-800">2.ຍົກຍ້າຍ / ນຳໃຊ້ ທສກ </h3>
+                <h3 class="text-base font-bold text-slate-800">2.ຍົກຍ້າຍ / ນຳໃຊ້ ຊຄທ </h3>
             </div>
 
             <form action="" method="POST" onsubmit="return validateMovement()" class="space-y-4">
@@ -440,7 +440,7 @@ try {
                 </div>
 
                 <div>
-                    <label class="block text-xs font-semibold text-slate-600 mb-1.5 uppercase">2. ເລືອກອຸປະກອນ ທສກ ທີ່ພະແນກມີ *</label>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1.5 uppercase">2. ເລືອກອຸປະກອນ ຊຄທ ທີ່ພະແນກມີ *</label>
                     <select id="selectAssetId" name="asset_id" disabled onchange="handleSelectAsset(this)" class="w-full bg-slate-100 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-amber-500 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
                         <option value="">-- ກະລຸນາເລືອກປະເພດອຸປະກອນກ່ອນ --</option>
                     </select>
@@ -537,7 +537,7 @@ try {
         <div class="p-5 border-b border-slate-100 flex items-center justify-between">
             <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
                 <i class="fas fa-history text-amber-500"></i>
-                ຕາຕະລາງປະຫວັດການເບີກຈ່າຍ ທສກ
+                ຕາຕະລາງປະຫວັດການເບີກຈ່າຍ ຊຄທ
             </h3>
             <span class="text-xs font-semibold bg-amber-50 text-amber-700 px-3 py-1 rounded-full border border-amber-200">
                 <?php echo count($movements_history); ?> ປະຫວັດ
@@ -637,7 +637,7 @@ function onCategoryChangeForm1(catName) {
 
 function onCategoryChangeForm2(catName) {
     const assetSelect = document.getElementById('selectAssetId');
-    assetSelect.innerHTML = '<option value="">-- ເລືອກອຸປະກອນ ທສກ --</option>';
+    assetSelect.innerHTML = '<option value="">-- ເລືອກອຸປະກອນ ຊຄທ --</option>';
 
     document.getElementById('moveQuantity').value = '1';
 
@@ -708,7 +708,7 @@ function validateCreateTsg() {
         return false;
     }
     if (!reqId || !itemId) {
-        Swal.fire({ icon: 'warning', title: 'ແຈ້ງເຕືອນ', text: 'ກະລຸນາເລືອກອຸປະກອນທີ່ຕ້ອງການສ້າງ ທສກ!', confirmButtonColor: '#002B66' });
+        Swal.fire({ icon: 'warning', title: 'ແຈ້ງເຕືອນ', text: 'ກະລຸນາເລືອກອຸປະກອນທີ່ຕ້ອງການສ້າງ ຊຄທ!', confirmButtonColor: '#002B66' });
         return false;
     }
     if (createQty <= 0) {
@@ -720,7 +720,7 @@ function validateCreateTsg() {
         return false;
     }
     if (!assetCode) {
-        Swal.fire({ icon: 'warning', title: 'ແຈ້ງເຕືອນ', text: 'ກະລຸນາປ້ອນລະຫັດ ທສກ (asset_code)!', confirmButtonColor: '#002B66' });
+        Swal.fire({ icon: 'warning', title: 'ແຈ້ງເຕືອນ', text: 'ກະລຸນາປ້ອນລະຫັດ ຊຄທ (asset_code)!', confirmButtonColor: '#002B66' });
         return false;
     }
     return true;
@@ -741,7 +741,7 @@ function validateMovement() {
         return false;
     }
     if (!assetId) {
-        Swal.fire({ icon: 'warning', title: 'ແຈ້ງເຕືອນ', text: 'ກະລຸນາເລືອກອຸປະກອນ ທສກ ທີ່ຕ້ອງການດຳເນີນການ!', confirmButtonColor: '#002B66' });
+        Swal.fire({ icon: 'warning', title: 'ແຈ້ງເຕືອນ', text: 'ກະລຸນາເລືອກອຸປະກອນ ຊຄທ ທີ່ຕ້ອງການດຳເນີນການ!', confirmButtonColor: '#002B66' });
         return false;
     }
     if (qty <= 0) {
@@ -749,7 +749,7 @@ function validateMovement() {
         return false;
     }
     if (qty > maxQty) {
-        Swal.fire({ icon: 'warning', title: 'ແຈ້ງເຕືອນ', text: `ຈຳນວນທີ່ຕ້ອງການນຳໃຊ້/ຍົກຍ້າຍ เกີນຈຳນວນຄົງເຫຼືອຂອງ ທສກ ນີ້! (ຄົງເຫຼືອ: ${maxQty})`, confirmButtonColor: '#002B66' });
+        Swal.fire({ icon: 'warning', title: 'ແຈ້ງເຕືອນ', text: `ຈຳນວນທີ່ຕ້ອງການນຳໃຊ້/ຍົກຍ້າຍ เกີນຈຳນວນຄົງເຫຼືອຂອງ ຊຄທ ນີ້! (ຄົງເຫຼືອ: ${maxQty})`, confirmButtonColor: '#002B66' });
         return false;
     }
     if (!takenBy) {

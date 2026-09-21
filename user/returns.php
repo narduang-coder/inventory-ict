@@ -190,7 +190,7 @@ if (!empty($user_id) && isset($pdo)) {
             </div>
 
             <div>
-                <label class="block text-xs font-semibold text-slate-600 mb-1.5 uppercase">ລະຫັດ asset / ທສກ (Asset Code)</label>
+                <label class="block text-xs font-semibold text-slate-600 mb-1.5 uppercase">ລະຫັດ asset / ຊຄທ (Asset Code)</label>
                 <input type="text" id="returnAssetCode" name="asset_code" placeholder="ເຊັ່ນ: 65465315" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-indigo-500 transition-all font-mono">
             </div>
 

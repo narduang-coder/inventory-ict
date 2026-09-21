@@ -110,7 +110,7 @@ if (!empty($user_department) && isset($pdo)) {
                 <input type="text" 
                        name="search" 
                        value="<?php echo htmlspecialchars($search_query); ?>" 
-                       placeholder="ຄົ້ນຫາ ຊື່, ລະຫັດ, ທສກ, ໝວດໝູ່..." 
+                       placeholder="ຄົ້ນຫາ ຊື່, ລະຫັດ, ຊຄທ, ໝວດໝູ່..." 
                        class="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all">
                 
                 <?php if (!empty($search_query)): ?>

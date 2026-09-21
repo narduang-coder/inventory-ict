@@ -164,7 +164,7 @@ $school = $stmt->fetch();
                 <i class="fas fa-boxes-stacked"></i> ຈັດການອຸປະກອນ
             </a>
             <a href="?user=tsg_management" class="sidebar-item <?php echo $page == 'tsg_management' ? 'active' : ''; ?>">
-                <i class="fas fa-boxes-stacked"></i> ຄຸ້ມຄອງ ທສກ ພະແນກ
+                <i class="fas fa-boxes-stacked"></i> ຄຸ້ມຄອງ ຊຄທ ພະແນກ
             </a>
             <a href="?user=return" class="sidebar-item <?php echo $page == 'return' ? 'active' : ''; ?>">
                 <i class="fas fa-rotate-left"></i> ສົ່ງອຸປະກອນຄືນ
