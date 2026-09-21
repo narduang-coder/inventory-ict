@@ -243,18 +243,8 @@ if ($page === 'items' && isset($_GET['get_blob'])) {
     $stmt->execute([$id]);
     $itemBlob = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    if ($itemBlob && $type === 'image' && !empty($itemBlob['image_data'])) {
-        header('Content-Type: ' . $itemBlob['image_mime']);
-        echo $itemBlob['image_data'];
-        exit();
-    }
-
-    if ($itemBlob && $type === 'doc' && !empty($itemBlob['doc_data'])) {
-        $disposition = (isset($_GET['download']) && $_GET['download'] === '1') ? 'attachment' : 'inline';
-        header('Content-Type: ' . $itemBlob['doc_mime']);
-        header('Content-Disposition: ' . $disposition . '; filename="' . rawurlencode($itemBlob['doc_name']) . '"');
-        echo $itemBlob['doc_data'];
-        exit();
+    if ($itemBlob && in_array($type, ['image', 'doc'], true)) {
+        streamItemBlob($itemBlob, $type, isset($_GET['download']) && $_GET['download'] === '1');
     }
 
     http_response_code(404);

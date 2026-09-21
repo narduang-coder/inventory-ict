@@ -203,6 +203,25 @@ function resolveLogoAssetPath($path): string {
     return 'assets/uploads/logos/' . basename($fallbacks[0]);
 }
 
+function streamItemBlob(array $itemBlob, string $type, bool $download = false): never {
+    $data = $type === 'doc' ? ($itemBlob['doc_data'] ?? null) : ($itemBlob['image_data'] ?? null);
+    $mime = $type === 'doc' ? ($itemBlob['doc_mime'] ?? '') : ($itemBlob['image_mime'] ?? '');
+    $name = $type === 'doc' ? ($itemBlob['doc_name'] ?? 'document') : 'image';
+
+    if (!is_string($data) || $data === '' || !is_string($mime) || $mime === '') {
+        http_response_code(404);
+        exit('File Not Found');
+    }
+
+    header('Content-Type: ' . $mime);
+    header('Content-Length: ' . strlen($data));
+    header('X-Content-Type-Options: nosniff');
+    header('Cache-Control: private, no-store, max-age=0');
+    header('Content-Disposition: ' . ($download ? 'attachment' : 'inline') . '; filename="' . addcslashes(basename((string)$name), "\\\"") . '"');
+    echo $data;
+    exit;
+}
+
 function safeErrorMessage(Throwable $e): string
 {
     error_log($e->getMessage() . "\n" . $e->getTraceAsString());

@@ -110,6 +110,30 @@ function getFileDataForDB($file, $allowedTypes) {
     ];
 }
 
+function getOptionalUploadData(array $files, string $field, array $allowedTypes, string $label): ?array {
+    if (!isset($files[$field]) || (int)($files[$field]['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+        return null;
+    }
+
+    $file = $files[$field];
+    if ((int)($file['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
+        $errorNames = [
+            UPLOAD_ERR_INI_SIZE => 'ໄຟລ໌ໃຫຍ່ເກີນ upload_max_filesize',
+            UPLOAD_ERR_FORM_SIZE => 'ໄຟລ໌ໃຫຍ່ເກີນຂະໜາດທີ່ຟອມກຳນົດ',
+            UPLOAD_ERR_PARTIAL => 'ອັບໂຫຼດໄຟລ໌ບໍ່ຄົບ',
+            UPLOAD_ERR_NO_TMP_DIR => 'ບໍ່ພົບ temporary directory ຂອງ PHP',
+            UPLOAD_ERR_CANT_WRITE => 'PHP ບໍ່ສາມາດຂຽນໄຟລ໌ຊົ່ວຄາວໄດ້',
+        ];
+        throw new RuntimeException($label . ': ' . ($errorNames[(int)$file['error']] ?? 'ການອັບໂຫຼດລົ້ມເຫຼວ'));
+    }
+
+    $result = getFileDataForDB($file, $allowedTypes);
+    if ($result === null) {
+        throw new RuntimeException($label . ': ປະເພດໄຟລ໌ບໍ່ຖືກຕ້ອງ ຫຼື ໄຟລ໌ໃຫຍ່ເກີນ 20MB');
+    }
+    return $result;
+}
+
 // ຈັດການ endpoint ສຳລັບ stream/download ຟາຍ Binary ຈາກ Database
 if (isset($_GET['get_blob'])) {
     $id = (int)$_GET['get_blob'];
@@ -119,18 +143,8 @@ if (isset($_GET['get_blob'])) {
     $stmt->execute([$id]);
     $itemBlob = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    if ($itemBlob) {
-        if ($type === 'image' && !empty($itemBlob['image_data'])) {
-            header("Content-Type: " . $itemBlob['image_mime']);
-            echo $itemBlob['image_data'];
-            exit();
-        } elseif ($type === 'doc' && !empty($itemBlob['doc_data'])) {
-            $disposition = (isset($_GET['download']) && $_GET['download'] == '1') ? 'attachment' : 'inline';
-            header("Content-Type: " . $itemBlob['doc_mime']);
-            header("Content-Disposition: {$disposition}; filename=\"" . rawurlencode($itemBlob['doc_name']) . "\"");
-            echo $itemBlob['doc_data'];
-            exit();
-        }
+    if ($itemBlob && in_array($type, ['image', 'doc'], true)) {
+        streamItemBlob($itemBlob, $type, isset($_GET['download']) && $_GET['download'] === '1');
     }
     http_response_code(404);
     exit('File Not Found');
@@ -216,23 +230,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 // ເກັບຟາຍຮູບລົງ Database (Binary Data)
                 $imageData = null; $imageMime = null;
-                if (isset($_FILES['image'])) {
-                    $imgFile = getFileDataForDB($_FILES['image'], ['jpg', 'jpeg', 'png', 'gif', 'webp']);
-                    if ($imgFile) {
-                        $imageData = $imgFile['data'];
-                        $imageMime = $imgFile['mime'];
-                    }
+                $imgFile = getOptionalUploadData($_FILES, 'image', ['jpg', 'jpeg', 'png', 'gif', 'webp'], 'ຮູບພາບ');
+                if ($imgFile) {
+                    $imageData = $imgFile['data'];
+                    $imageMime = $imgFile['mime'];
                 }
 
                 // ເກັບຟາຍເອກະສານລົງ Database (Binary Data)
                 $docData = null; $docMime = null; $docName = null;
-                if (isset($_FILES['document'])) {
-                    $docFile = getFileDataForDB($_FILES['document'], ['pdf', 'docx', 'xlsx', 'pptx', 'txt']);
-                    if ($docFile) {
-                        $docData = $docFile['data'];
-                        $docMime = $docFile['mime'];
-                        $docName = $docFile['name'];
-                    }
+                $docFile = getOptionalUploadData($_FILES, 'document', ['pdf', 'docx', 'xlsx', 'pptx', 'txt'], 'ເອກະສານ');
+                if ($docFile) {
+                    $docData = $docFile['data'];
+                    $docMime = $docFile['mime'];
+                    $docName = $docFile['name'];
                 }
                 
                 $barcode = generateBarcode($pdo, $import_date);
@@ -419,25 +429,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $imageData = $oldData['image_data'];
                 $imageMime = $oldData['image_mime'];
                 
-                if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
-                    $imgFile = getFileDataForDB($_FILES['image'], ['jpg', 'jpeg', 'png', 'gif', 'webp']);
-                    if ($imgFile) {
-                        $imageData = $imgFile['data'];
-                        $imageMime = $imgFile['mime'];
-                    }
+                $imgFile = getOptionalUploadData($_FILES, 'image', ['jpg', 'jpeg', 'png', 'gif', 'webp'], 'ຮູບພາບ');
+                if ($imgFile) {
+                    $imageData = $imgFile['data'];
+                    $imageMime = $imgFile['mime'];
                 }
 
                 // ກວດສອບ ແລະ ອັບເດດ ເອກະສານ binary BLOB
                 $docData = $oldData['doc_data'];
                 $docMime = $oldData['doc_mime'];
                 $docName = $oldData['doc_name'];
-                if (isset($_FILES['document']) && $_FILES['document']['error'] === UPLOAD_ERR_OK) {
-                    $docFile = getFileDataForDB($_FILES['document'], ['pdf', 'docx', 'xlsx', 'pptx', 'txt']);
-                    if ($docFile) {
-                        $docData = $docFile['data'];
-                        $docMime = $docFile['mime'];
-                        $docName = $docFile['name'];
-                    }
+                $docFile = getOptionalUploadData($_FILES, 'document', ['pdf', 'docx', 'xlsx', 'pptx', 'txt'], 'ເອກະສານ');
+                if ($docFile) {
+                    $docData = $docFile['data'];
+                    $docMime = $docFile['mime'];
+                    $docName = $docFile['name'];
                 }
 
                 $stmt = $pdo->prepare("
@@ -585,8 +591,8 @@ if (isset($pdo)) {
         $sql = "SELECT i.id, i.item_code, i.serial_number, i.name, i.brand, i.model, i.cate_id, i.unit, 
                        i.quantity, i.min_quantity, i.barcode, i.is_active, i.import_date, i.origin, 
                        i.warranty_years, i.service_tax, i.manufacturing_year, i.remark, i.edit_history,
-                       (i.image_data IS NOT NULL) AS has_image, 
-                       (i.doc_data IS NOT NULL) AS has_doc, i.doc_name, c.cate_name
+                       (COALESCE(OCTET_LENGTH(i.image_data), 0) > 0) AS has_image,
+                       (COALESCE(OCTET_LENGTH(i.doc_data), 0) > 0) AS has_doc, i.doc_name, c.cate_name
                 FROM items i 
                 LEFT JOIN category c ON i.cate_id = c.cate_id 
                 WHERE i.is_active = 1 
@@ -734,8 +740,8 @@ if ($alert): ?>
                         $detailUrl = rtrim($baseUrl, "/") . "/qr_detail.php?id=" . urlencode((string)$item['id']);
                         
                         // Link Stream DB BLOB
-                        $blobImgUrl = "?admin=items&get_blob=" . $item['id'] . "&type=image";
-                        $blobDocUrl = "?admin=items&get_blob=" . $item['id'] . "&type=doc";
+                        $blobImgUrl = appUrl('admin.php') . '?admin=items&get_blob=' . (int)$item['id'] . '&type=image';
+                        $blobDocUrl = appUrl('admin.php') . '?admin=items&get_blob=' . (int)$item['id'] . '&type=doc';
                     ?>
                         <tr class="border-b hover:bg-gray-50 transition item-row" 
                             data-name="<?php echo htmlspecialchars(mb_strtolower($item['name'])); ?>"
@@ -1590,7 +1596,7 @@ function editItem(item) {
     const imgPreview = document.getElementById('imagePreview');
     const imgContainer = document.getElementById('imagePreviewContainer');
     if (item.has_image == 1) {
-        const blobUrl = `?admin=items&get_blob=${item.id}&type=image`;
+        const blobUrl = `<?php echo htmlspecialchars(appUrl('admin.php'), ENT_QUOTES); ?>?admin=items&get_blob=${item.id}&type=image`;
         imgContainer.innerHTML = `<img src="${blobUrl}" class="w-10 h-10 object-cover rounded border"> <span class="text-xs text-emerald-600 font-semibold">ມີຮູບພາບໃນ Database ແລ້ວ</span>`;
         imgPreview.classList.remove('hidden');
     } else {
