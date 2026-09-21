@@ -73,6 +73,11 @@ function generateBarcode($pdo, $import_date = null) {
     return $year . sprintf("%04d", $nextNum);
 }
 
+// ຈຳກັດຂະໜາດໄຟລ໌ສຳລັບລະບົບ (100 MB)
+// ໝາຍເຫດ: PHP upload_max_filesize/post_max_size ແລະ MySQL max_allowed_packet
+// ຕ້ອງຕັ້ງໃຫ້ສູງກວ່າຄ່ານີ້ຢູ່ server/container ດ້ວຍ.
+const MAX_ITEM_UPLOAD_BYTES = 100 * 1024 * 1024;
+
 // ຟັງຊັນອ່ານ Binary Data ຂອງຟາຍ ເພື່ອເກັບລົງ Database (BLOB)
 function getFileDataForDB($file, $allowedTypes) {
     if (!isset($file['error'], $file['tmp_name'], $file['name'], $file['size']) ||
@@ -91,7 +96,7 @@ function getFileDataForDB($file, $allowedTypes) {
         'txt' => 'text/plain'
     ];
 
-    if (!in_array($ext, $allowedTypes, true) || !isset($mimeByExt[$ext]) || (int)$file['size'] > 20 * 1024 * 1024) {
+    if (!in_array($ext, $allowedTypes, true) || !isset($mimeByExt[$ext]) || (int)$file['size'] > MAX_ITEM_UPLOAD_BYTES) {
         return null;
     }
 
@@ -106,7 +111,8 @@ function getFileDataForDB($file, $allowedTypes) {
     return [
         'data' => file_get_contents($file['tmp_name']),
         'mime' => $mime,
-        'name' => $file['name']
+        'name' => $file['name'],
+        'size' => (int)$file['size']
     ];
 }
 
@@ -118,8 +124,8 @@ function getOptionalUploadData(array $files, string $field, array $allowedTypes,
     $file = $files[$field];
     if ((int)($file['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
         $errorNames = [
-            UPLOAD_ERR_INI_SIZE => 'ໄຟລ໌ໃຫຍ່ເກີນ upload_max_filesize',
-            UPLOAD_ERR_FORM_SIZE => 'ໄຟລ໌ໃຫຍ່ເກີນຂະໜາດທີ່ຟອມກຳນົດ',
+            UPLOAD_ERR_INI_SIZE => 'ໄຟລ໌ໃຫຍ່ເກີນ upload_max_filesize ຂອງ PHP (ກະລຸນາຕັ້ງໃຫ້ > 100MB)',
+            UPLOAD_ERR_FORM_SIZE => 'ໄຟລ໌ໃຫຍ່ເກີນຂະໜາດທີ່ຟອມກຳນົດ (ສູງສຸດ 100MB)',
             UPLOAD_ERR_PARTIAL => 'ອັບໂຫຼດໄຟລ໌ບໍ່ຄົບ',
             UPLOAD_ERR_NO_TMP_DIR => 'ບໍ່ພົບ temporary directory ຂອງ PHP',
             UPLOAD_ERR_CANT_WRITE => 'PHP ບໍ່ສາມາດຂຽນໄຟລ໌ຊົ່ວຄາວໄດ້',
@@ -129,7 +135,7 @@ function getOptionalUploadData(array $files, string $field, array $allowedTypes,
 
     $result = getFileDataForDB($file, $allowedTypes);
     if ($result === null) {
-        throw new RuntimeException($label . ': ປະເພດໄຟລ໌ບໍ່ຖືກຕ້ອງ ຫຼື ໄຟລ໌ໃຫຍ່ເກີນ 20MB');
+        throw new RuntimeException($label . ': ປະເພດໄຟລ໌ບໍ່ຖືກຕ້ອງ ຫຼື ໄຟລ໌ໃຫຍ່ເກີນ 100MB');
     }
     return $result;
 }
