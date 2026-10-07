@@ -18,6 +18,107 @@ if (isset($_GET['export']) && $_GET['export'] == 'csv' && $page == 'items') {
     exit();
 }
 
+if (isset($_GET['export']) && $page === 'dashboard' && in_array($_GET['export'], ['excel', 'pdf'], true)) {
+    if (!verifyCSRFToken($_GET['token'] ?? '')) {
+        http_response_code(403);
+        exit('Unauthorized access');
+    }
+
+    $summary = $pdo->query("\n        SELECT\n            (SELECT COUNT(*) FROM items) AS total_items,\n            (SELECT COUNT(*) FROM users) AS total_users,\n            (SELECT COUNT(*) FROM requests) AS total_requests,\n            (SELECT COUNT(*) FROM requests WHERE status = 'pending') AS pending_requests,\n            (SELECT COUNT(*) FROM requests WHERE status = 'approved') AS approved_requests,\n            (SELECT COUNT(*) FROM requests WHERE status = 'rejected') AS rejected_requests,\n            (SELECT COUNT(*) FROM items WHERE quantity <= min_quantity) AS low_stock,\n            (SELECT SUM(price_per_unit * quantity) FROM items) AS total_value\n    ")->fetch(PDO::FETCH_ASSOC);
+    $lowStockRows = $pdo->query("SELECT name, item_code, quantity, min_quantity, unit FROM items WHERE quantity <= min_quantity ORDER BY quantity ASC LIMIT 5")->fetchAll(PDO::FETCH_ASSOC);
+    $recentRequestRows = $pdo->query("SELECT r.purpose, r.status, r.created_at, u.fullname FROM requests r JOIN users u ON r.user_id = u.id ORDER BY r.created_at DESC LIMIT 5")->fetchAll(PDO::FETCH_ASSOC);
+    $monthlyRows = function_exists('getMonthlyStats') ? getMonthlyStats($pdo) : [];
+    $popularRows = function_exists('getPopularItems') ? getPopularItems($pdo) : [];
+    $topUserRows = function_exists('getTopUsers') ? getTopUsers($pdo) : [];
+
+    $exportSettingsStmt = $pdo->query("SELECT school_name, logo_path FROM settings LIMIT 1");
+    $exportSettings = $exportSettingsStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+    $schoolName = $exportSettings['school_name'] ?? 'ຝ່າຍ ICT';
+    $logoPath = assetPath($exportSettings['logo_path'] ?? '');
+    $logoHtml = '';
+    if ($logoPath !== '' && is_file($logoPath)) {
+        $logoInfo = getimagesize($logoPath);
+        if ($logoInfo && in_array($logoInfo['mime'], ['image/jpeg', 'image/png', 'image/gif', 'image/webp'], true)) {
+            $logoHtml = '<img src="data:' . $logoInfo['mime'] . ';base64,' . base64_encode(file_get_contents($logoPath)) . '" alt="Logo" style="height:58px;max-width:90px;object-fit:contain">';
+        }
+    }
+    $escapeExport = static function ($value) {
+        return htmlspecialchars((string)($value ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    };
+    $buildTable = static function ($headers, $rows) use ($escapeExport) {
+        $html = '<table class="report-table" border="1"><thead><tr>';
+        foreach ($headers as $header) $html .= '<th>' . $escapeExport($header) . '</th>';
+        $html .= '</tr></thead><tbody>';
+        if (empty($rows)) {
+            $html .= '<tr><td colspan="' . count($headers) . '" class="empty">ບໍ່ມີຂໍ້ມູນ</td></tr>';
+        } else {
+            foreach ($rows as $row) {
+                $html .= '<tr>';
+                foreach ($row as $cell) $html .= '<td>' . $escapeExport($cell) . '</td>';
+                $html .= '</tr>';
+            }
+        }
+        return $html . '</tbody></table>';
+    };
+
+    $summaryRows = [
+        ['ອຸປະກອນທັງໝົດ', number_format((int)$summary['total_items']), 'ຜູ້ໃຊ້ທັງໝົດ', number_format((int)$summary['total_users'])],
+        ['ຄຳຂໍທັງໝົດ', number_format((int)$summary['total_requests']), 'ລໍຖ້າອະນຸມັດ', number_format((int)$summary['pending_requests'])],
+        ['ອະນຸມັດແລ້ວ', number_format((int)$summary['approved_requests']), 'ປະຕິເສດ', number_format((int)$summary['rejected_requests'])],
+        ['ອຸປະກອນໃກ້ໝົດ', number_format((int)$summary['low_stock']), 'ມູນຄ່າສະຕັອກ', formatCurrency($summary['total_value'] ?? 0)],
+    ];
+    $lowStockReportRows = array_map(static function ($row) {
+        return [$row['name'], $row['item_code'] ?? '', (int)$row['quantity'] . ' ' . ($row['unit'] ?? ''), (int)$row['min_quantity'] . ' ' . ($row['unit'] ?? '')];
+    }, $lowStockRows);
+    $recentReportRows = array_map(static function ($row) {
+        $status = match ($row['status'] ?? '') {
+            'approved' => 'ອະນຸມັດແລ້ວ',
+            'rejected' => 'ປະຕິເສດ',
+            default => 'ລໍຖ້າອະນຸມັດ'
+        };
+        return [$row['fullname'] ?? '', $row['purpose'] ?? '', $status, formatDateTime($row['created_at'] ?? '')];
+    }, $recentRequestRows);
+    $monthlyReportRows = array_map(static function ($row) {
+        $month = !empty($row['month']) ? date('m/Y', strtotime($row['month'] . '-01')) : '';
+        return [$month, (int)($row['approved'] ?? 0), (int)($row['pending'] ?? 0), (int)($row['rejected'] ?? 0)];
+    }, $monthlyRows);
+    $popularReportRows = array_map(static function ($row) {
+        return [$row['name'] ?? '', $row['item_code'] ?? '', (int)($row['total_quantity'] ?? 0), (int)($row['request_count'] ?? 0)];
+    }, $popularRows);
+    $topUserReportRows = array_map(static function ($row) {
+        return [$row['fullname'] ?? '', $row['username'] ?? '', (int)($row['request_count'] ?? 0), (int)($row['total_items'] ?? 0)];
+    }, $topUserRows);
+
+    $filename = 'dashboard_summary_' . date('Y-m-d');
+    $reportHtml = '<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:"Phetsarath OT","Noto Sans Lao",Arial,sans-serif;color:#111}.letterhead{text-align:center;font-weight:bold;line-height:1.7}.logo{text-align:center;margin:8px 0}.org{text-align:center;font-weight:bold;margin:6px 0}.title{text-align:center;font-size:18px;line-height:1.7;margin:14px 0}.meta{text-align:right;margin:8px 0;font-size:12px}.section-title{font-weight:bold;margin:18px 0 6px}.report-table{border-collapse:collapse;width:100%;margin-bottom:14px;font-size:11px}.report-table th,.report-table td{border:1px solid #111;padding:6px;vertical-align:top}.report-table th{text-align:center;background:#e8eef5}.report-table .empty{text-align:center;color:#555}.report-table.summary td:nth-child(odd){font-weight:bold;background:#f6f7f9}.print-actions{text-align:right;margin-bottom:12px}@page{size:A4 portrait;margin:12mm}@media print{.print-actions{display:none}thead{display:table-header-group}tr{break-inside:avoid}}</style></head><body>';
+    if ($_GET['export'] === 'pdf') {
+        $reportHtml .= '<div class="print-actions"><button onclick="window.print()">ພິມ / ບັນທຶກເປັນ PDF</button></div>';
+    }
+    $reportHtml .= '<div class="letterhead">ສາທາລະນະລັດ ປະຊາທິປະໄຕ ປະຊາຊົນລາວ<br>ສັນຕິພາບ ເອກະລາດ ປະຊາທິປະໄຕ ເອກະພາບ ວັດທະນາຖາວອນ</div>';
+    if ($_GET['export'] === 'pdf' && $logoHtml !== '') $reportHtml .= '<div class="logo">' . $logoHtml . '</div>';
+    $reportHtml .= '<div class="org">' . $escapeExport($schoolName) . '</div><h1 class="title">ບົດສະຫຼຸບພາບລວມລະບົບ<br><small>Inventory Dashboard Summary</small></h1>';
+    $reportHtml .= '<div class="meta">ວັນທີລາຍງານ: ' . date('d/m/Y') . '</div>';
+    $reportHtml .= '<div class="section-title">ສະຫຼຸບຕົວເລກ</div>' . $buildTable(['ລາຍການ', 'ຈຳນວນ', 'ລາຍການ', 'ຈຳນວນ'], $summaryRows);
+    $reportHtml .= '<div class="section-title">ອຸປະກອນໃກ້ໝົດ</div>' . $buildTable(['ຊື່ອຸປະກອນ', 'ລະຫັດ', 'ຄົງເຫຼືອ', 'ລະດັບຕ່ຳສຸດ'], $lowStockReportRows);
+    $reportHtml .= '<div class="section-title">ຄຳຂໍລ່າສຸດ</div>' . $buildTable(['ຜູ້ຂໍ', 'ຈຸດປະສົງ', 'ສະຖານະ', 'ວັນທີ'], $recentReportRows);
+    $reportHtml .= '<div class="section-title">ສະຖິຕິການເບີກລາຍເດືອນ</div>' . $buildTable(['ເດືອນ', 'ອະນຸມັດ', 'ລໍຖ້າ', 'ປະຕິເສດ'], $monthlyReportRows);
+    $reportHtml .= '<div class="section-title">ອຸປະກອນຍອດນິຍົມ</div>' . $buildTable(['ອຸປະກອນ', 'ລະຫັດ', 'ຈຳນວນທີ່ເບີກ', 'ຈຳນວນຄຳຂໍ'], $popularReportRows);
+    $reportHtml .= '<div class="section-title">ຜູ້ໃຊ້ທີ່ເບີກຫຼາຍ</div>' . $buildTable(['ຊື່ຜູ້ໃຊ້', 'Username', 'ຈຳນວນຄຳຂໍ', 'ຈຳນວນອຸປະກອນ'], $topUserReportRows);
+    $reportHtml .= '</body></html>';
+
+    if ($_GET['export'] === 'excel') {
+        header('Content-Type: application/vnd.ms-excel; charset=utf-8');
+        header('Content-Disposition: attachment; filename=' . $filename . '.xls');
+        echo $reportHtml;
+        exit;
+    }
+
+    header('Content-Type: text/html; charset=utf-8');
+    header('Content-Disposition: inline; filename=' . $filename . '.pdf');
+    echo str_replace('</body>', '<script>window.addEventListener("load",function(){window.print();});</script></body>', $reportHtml);
+    exit;
+}
+
 // Export CSV / Excel / PDF ສໍາລັບ issuance
 if (isset($_GET['export']) && $page === 'issuance') {
     $exportType = $_GET['export'] ?? '';
@@ -75,6 +176,39 @@ if (isset($_GET['export']) && $page === 'issuance') {
         $rows = $exportStmt->fetchAll(PDO::FETCH_ASSOC);
 
         $filename = 'issuance_export_' . date('Y-m-d');
+        $settingsStmt = $pdo->query("SELECT school_name, logo_path FROM settings LIMIT 1");
+        $exportSettings = $settingsStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+        $schoolName = $exportSettings['school_name'] ?? 'ຝ່າຍ ICT';
+        $logoPath = assetPath($exportSettings['logo_path'] ?? '');
+        $logoHtml = '';
+        if ($logoPath !== '' && is_file($logoPath)) {
+            $logoInfo = getimagesize($logoPath);
+            if ($logoInfo && in_array($logoInfo['mime'], ['image/jpeg', 'image/png', 'image/gif', 'image/webp'], true)) {
+                $logoHtml = '<img src="data:' . $logoInfo['mime'] . ';base64,' . base64_encode(file_get_contents($logoPath)) . '" alt="Logo" style="height:58px;max-width:90px;object-fit:contain">';
+            }
+        }
+        $escapeExport = static function ($value) {
+            return htmlspecialchars((string)($value ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        };
+        $reportRows = [];
+        foreach ($rows as $index => $row) {
+            $assetCode = $row['display_asset_code'] ?? $row['asset_code'] ?? '';
+            $itemDetails = array_filter([
+                $row['item_name'] ?? '',
+                $assetCode !== '' ? 'ລະຫັດ: ' . $assetCode : '',
+                !empty($row['item_code']) ? 'Item: ' . $row['item_code'] : '',
+                !empty($row['serial_number']) ? 'SN: ' . $row['serial_number'] : '',
+            ]);
+            $reportRows[] = [
+                $index + 1,
+                implode("\n", $itemDetails),
+                $row['issued_to'] ?? '',
+                $row['department'] ?? '',
+                !empty($row['issue_date']) ? formatDate($row['issue_date']) : '',
+                trim(($row['quantity'] ?? '') . ' ' . ($row['unit'] ?? '')),
+                '',
+            ];
+        }
 
         if ($exportType === 'csv') {
             header('Content-Type: text/csv; charset=utf-8');
@@ -111,58 +245,49 @@ if (isset($_GET['export']) && $page === 'issuance') {
         if ($exportType === 'excel') {
             header('Content-Type: application/vnd.ms-excel; charset=utf-8');
             header('Content-Disposition: attachment; filename=' . $filename . '.xls');
-            echo "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:x='urn:schemas-microsoft-com:office:excel' xmlns='http://www.w3.org/TR/REC-html40'>\n";
-            echo "<meta charset='UTF-8'>\n";
-            echo "<table border='1'>\n";
-            echo "<tr><th>Issue Code</th><th>Asset Code</th><th>Item Name</th><th>Item Code</th><th>Serial Number</th><th>Issued To</th><th>Department</th><th>Issue Date</th><th>Expected Return Date</th><th>Status</th><th>Quantity</th><th>Unit</th><th>Created By</th><th>Remark</th></tr>\n";
-
-            foreach ($rows as $row) {
+            echo "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:x='urn:schemas-microsoft-com:office:excel' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='UTF-8'><style>body{font-family:'Phetsarath OT','Noto Sans Lao',Arial,sans-serif}table{border-collapse:collapse;width:100%}.letterhead{text-align:center;font-weight:bold}.title{text-align:center;font-size:18px;font-weight:bold;padding:12px}.meta{font-size:12px;padding:8px}.colhead{font-weight:bold;text-align:center;background:#e8eef5}.cell{height:32px;vertical-align:middle}.signature{height:36px}</style></head><body><table border='1'>";
+            echo '<tr><td colspan="7" class="letterhead" style="border:0;font-size:14px">ສາທາລະນະລັດ ປະຊາທິປະໄຕ ປະຊາຊົນລາວ<br>ສັນຕິພາບ ເອກະລາດ ປະຊາທິປະໄຕ ເອກະພາບ ວັດທະນາຖາວອນ</td></tr>';
+            if ($logoHtml !== '') echo '<tr><td colspan="7" style="border:0;text-align:center;padding-top:8px">' . $logoHtml . '</td></tr>';
+            echo '<tr><td colspan="7" class="letterhead" style="border:0;padding:6px">' . $escapeExport($schoolName) . '</td></tr>';
+            echo '<tr><td colspan="7" class="title" style="border:0">ບັນຊີລາຍການອອກຈ່າຍອຸປະກອນ<br><span style="font-size:14px">Equipment Issuance List</span></td></tr>';
+            echo '<tr><td colspan="4" class="meta" style="border:0">ວັນທີພິມ: ' . date('d/m/Y') . '</td><td colspan="3" class="meta" style="border:0;text-align:right">ລວມ ' . count($reportRows) . ' ລາຍການ</td></tr>';
+            echo '<tr class="colhead"><th style="width:6%">ລ/ດ</th><th style="width:27%">ລາຍການອຸປະກອນ</th><th style="width:17%">ຜູ້ຮັບ</th><th style="width:17%">ພະແນກ</th><th style="width:12%">ວັນທີ</th><th style="width:9%">ຈຳນວນ</th><th style="width:12%">ລາຍເຊັນ</th></tr>';
+            foreach ($reportRows as $reportRow) {
                 echo '<tr>';
-                foreach ([
-                    $row['issue_code'] ?? '',
-                    $row['display_asset_code'] ?? $row['asset_code'] ?? '',
-                    $row['item_name'] ?? '',
-                    $row['item_code'] ?? '',
-                    $row['serial_number'] ?? '',
-                    $row['issued_to'] ?? '',
-                    $row['department'] ?? '',
-                    $row['issue_date'] ?? '',
-                    $row['expected_return_date'] ?? '',
-                    $row['status'] ?? '',
-                    $row['quantity'] ?? '',
-                    $row['unit'] ?? '',
-                    $row['approver_name'] ?? '',
-                    $row['remark'] ?? '',
-                ] as $cell) {
-                    echo '<td>' . htmlspecialchars((string) $cell, ENT_QUOTES, 'UTF-8') . '</td>';
+                foreach ($reportRow as $cellIndex => $cell) {
+                    $style = $cellIndex === 0 || $cellIndex === 4 || $cellIndex === 5 ? 'text-align:center;' : 'text-align:left;';
+                    if ($cellIndex === 6) $style .= 'height:36px;';
+                    echo '<td class="cell" style="' . $style . 'white-space:pre-line">' . $escapeExport($cell) . '</td>';
                 }
                 echo '</tr>';
             }
-
-            echo "</table></html>\n";
+            echo '<tr><td colspan="3" style="border:0;text-align:center;padding-top:36px">ຜູ້ຈ່າຍ: ........................................</td><td colspan="4" style="border:0;text-align:center;padding-top:36px">ຜູ້ຮັບຜິດຊອບ: ........................................</td></tr>';
+            echo "</table></body></html>\n";
             exit;
         }
 
         if ($exportType === 'pdf') {
             header('Content-Type: text/html; charset=utf-8');
             header('Content-Disposition: inline; filename=' . $filename . '.pdf');
-            echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Issuance Export</title><style>body{font-family:Arial,sans-serif;margin:24px;color:#111}table{border-collapse:collapse;width:100%;font-size:12px}th,td{border:1px solid #d1d5db;padding:8px;text-align:left;vertical-align:top}th{background:#f3f4f6}h2{margin-bottom:16px}.print-actions{display:none}@media print{body{margin:0}.print-actions{display:none}}</style></head><body>';
-            echo '<h2>Issuance Report</h2>';
-            echo '<table><thead><tr><th>Issue Code</th><th>Asset Code</th><th>Item Name</th><th>Issued To</th><th>Department</th><th>Issue Date</th><th>Status</th><th>Qty</th></tr></thead><tbody>';
-            foreach ($rows as $row) {
+            echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Issuance Export</title><style>@page{size:A4 portrait;margin:12mm}body{font-family:"Phetsarath OT","Noto Sans Lao",Arial,sans-serif;margin:0;color:#111}.letterhead{text-align:center;font-weight:bold;font-size:14px;line-height:1.7}.logo{text-align:center;margin:8px 0}.logo img{height:58px;max-width:90px;object-fit:contain}.org{text-align:center;font-weight:bold;margin:6px 0}.title{text-align:center;font-size:18px;font-weight:bold;line-height:1.7;margin:16px 0}.title small{font-size:13px}.meta{display:flex;justify-content:space-between;margin:12px 0;font-size:12px}table{border-collapse:collapse;width:100%;table-layout:fixed;font-size:11px}th,td{border:1px solid #111;padding:7px 5px;text-align:left;vertical-align:middle;overflow-wrap:anywhere}th{text-align:center;font-weight:bold;background:#f3f4f6}.center{text-align:center}.signature{height:42px}.signoff{display:flex;justify-content:space-around;margin-top:48px;text-align:center;font-size:12px}.print-actions{margin:0 0 14px;text-align:right}.print-actions button{padding:8px 14px}@media print{.print-actions{display:none}body{print-color-adjust:exact;-webkit-print-color-adjust:exact}thead{display:table-header-group}tr{break-inside:avoid}}</style></head><body>';
+            echo '<div class="print-actions"><button type="button" onclick="window.print()">ພິມ / ບັນທຶກເປັນ PDF</button></div>';
+            echo '<header class="letterhead">ສາທາລະນະລັດ ປະຊາທິປະໄຕ ປະຊາຊົນລາວ<br>ສັນຕິພາບ ເອກະລາດ ປະຊາທິປະໄຕ ເອກະພາບ ວັດທະນາຖາວອນ</header>';
+            if ($logoHtml !== '') echo '<div class="logo">' . $logoHtml . '</div>';
+            echo '<div class="org">' . $escapeExport($schoolName) . '</div>';
+            echo '<h1 class="title">ບັນຊີລາຍການອອກຈ່າຍອຸປະກອນ<br><small>Equipment Issuance List</small></h1>';
+            echo '<div class="meta"><span>ວັນທີພິມ: ' . date('d/m/Y') . '</span><span>ລວມ ' . count($reportRows) . ' ລາຍການ</span></div>';
+            echo '<table><thead><tr><th style="width:6%">ລ/ດ</th><th style="width:27%">ລາຍການອຸປະກອນ</th><th style="width:17%">ຜູ້ຮັບ</th><th style="width:17%">ພະແນກ</th><th style="width:12%">ວັນທີ</th><th style="width:9%">ຈຳນວນ</th><th style="width:12%">ລາຍເຊັນ</th></tr></thead><tbody>';
+            foreach ($reportRows as $reportRow) {
                 echo '<tr>';
-                echo '<td>' . htmlspecialchars($row['issue_code'] ?? '', ENT_QUOTES, 'UTF-8') . '</td>';
-                echo '<td>' . htmlspecialchars($row['display_asset_code'] ?? $row['asset_code'] ?? '', ENT_QUOTES, 'UTF-8') . '</td>';
-                echo '<td>' . htmlspecialchars($row['item_name'] ?? '', ENT_QUOTES, 'UTF-8') . '</td>';
-                echo '<td>' . htmlspecialchars($row['issued_to'] ?? '', ENT_QUOTES, 'UTF-8') . '</td>';
-                echo '<td>' . htmlspecialchars($row['department'] ?? '', ENT_QUOTES, 'UTF-8') . '</td>';
-                echo '<td>' . htmlspecialchars($row['issue_date'] ?? '', ENT_QUOTES, 'UTF-8') . '</td>';
-                echo '<td>' . htmlspecialchars($row['status'] ?? '', ENT_QUOTES, 'UTF-8') . '</td>';
-                echo '<td>' . htmlspecialchars((string)($row['quantity'] ?? ''), ENT_QUOTES, 'UTF-8') . '</td>';
+                foreach ($reportRow as $cellIndex => $cell) {
+                    $class = in_array($cellIndex, [0, 4, 5], true) ? ' class="center"' : '';
+                    if ($cellIndex === 6) $class = ' class="signature"';
+                    echo '<td' . $class . '>' . nl2br($escapeExport($cell)) . '</td>';
+                }
                 echo '</tr>';
             }
-            echo '</tbody></table>';
-            echo '<script>window.print();</script>';
+            echo '</tbody></table><div class="signoff"><div>ຜູ້ຈ່າຍ<br><br>........................................</div><div>ຜູ້ຮັບຜິດຊອບ<br><br>........................................</div></div>';
+            echo '<script>window.addEventListener("load",function(){window.print();});</script>';
             echo '</body></html>';
             exit;
         }

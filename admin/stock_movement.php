@@ -40,6 +40,19 @@ $transfer_history = array_values(array_filter($all_history, fn($h) => $h['moveme
 $return_history   = array_values(array_filter($all_history, fn($h) => $h['movement_type'] === 'return'));
 $count_history    = array_values(array_filter($all_history, fn($h) => $h['movement_type'] === 'count'));
 $dispose_history  = array_values(array_filter($all_history, fn($h) => $h['movement_type'] === 'dispose'));
+$reportSettings = $pdo->query("SELECT school_name, logo_path FROM settings LIMIT 1")->fetch(PDO::FETCH_ASSOC) ?: [];
+$reportLogoData = '';
+$reportLogoPath = assetPath($reportSettings['logo_path'] ?? '');
+if ($reportLogoPath !== '' && is_file($reportLogoPath)) {
+    $reportLogoInfo = getimagesize($reportLogoPath);
+    if ($reportLogoInfo && in_array($reportLogoInfo['mime'], ['image/jpeg', 'image/png', 'image/gif', 'image/webp'], true)) {
+        $reportLogoData = 'data:' . $reportLogoInfo['mime'] . ';base64,' . base64_encode(file_get_contents($reportLogoPath));
+    }
+}
+$movementReportHeader = [
+    'schoolName' => $reportSettings['school_name'] ?? 'ຝ່າຍ ICT',
+    'logoData' => $reportLogoData,
+];
 ?>
 <!DOCTYPE html>
 <html lang="lo">
@@ -176,14 +189,17 @@ $dispose_history  = array_values(array_filter($all_history, fn($h) => $h['moveme
                     <i class="fas fa-rotate-right"></i> ລ້າງຄ່າ
                 </button>
             </div>
-            <div>
-            <button type="button" onclick="printFilteredHistory()" class="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-medium transition shadow-sm hover:shadow flex items-center gap-1.5">
-                <i class="fas fa-print"></i> ພິມລາຍງານທັງໝົດ
-            </button> <br>
-            <button onclick="printSelectedHistory()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 shadow-sm">
-                    <i class="fas fa-print"></i> ພິມສະເພາະລາຍການທີ່ເລືອກ
+            <div class="flex flex-wrap justify-end gap-2">
+                <button type="button" onclick="exportHistoryExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 shadow-sm">
+                    <i class="fas fa-file-excel"></i> Excel
                 </button>
-                </div>
+                <button type="button" onclick="printFilteredHistory()" class="bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 shadow-sm">
+                    <i class="fas fa-file-pdf"></i> PDF
+                </button>
+                <button type="button" onclick="printSelectedHistory()" class="bg-slate-700 hover:bg-slate-800 text-white px-4 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 shadow-sm">
+                    <i class="fas fa-print"></i> ພິມລາຍການທີ່ເລືອກ
+                </button>
+            </div>
         </div>
     </form>
 
@@ -206,7 +222,11 @@ $dispose_history  = array_values(array_filter($all_history, fn($h) => $h['moveme
 
 <script>
 const rawHistoryData = <?php echo json_encode($all_history, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
+const movementReportHeader = <?php echo json_encode($movementReportHeader, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
 let currentDisplayedData = [];
+let currentHistoryPage = 1;
+const historyPageSize = 15;
+const selectedHistoryIds = new Set();
 
 function resolveMovementType(item) {
     return item.movement_type || 'receive';
@@ -218,11 +238,14 @@ function applyFilter() {
     const startDate = document.getElementById('startDateInput').value;
     const endDate = document.getElementById('endDateInput').value;
 
+    selectedHistoryIds.clear();
     currentDisplayedData = rawHistoryData.filter(item => {
         const itemName = (item.item_name || '').toLowerCase();
         const itemCode = (item.item_code || '').toLowerCase();
         const serialVal = (item.display_serial_number || '').toLowerCase();
         const createdBy = (item.created_by_name || '').toLowerCase();
+        const fromDepartment = (item.from_department || '').toLowerCase();
+        const toDepartment = (item.to_department || '').toLowerCase();
         const note = (item.note || '').toLowerCase();
         const refNo = (item.reference_no || '').toLowerCase();
 
@@ -231,6 +254,8 @@ function applyFilter() {
             itemCode.includes(searchVal) || 
             serialVal.includes(searchVal) || 
             createdBy.includes(searchVal) || 
+            fromDepartment.includes(searchVal) ||
+            toDepartment.includes(searchVal) ||
             note.includes(searchVal) ||
             refNo.includes(searchVal);
 
@@ -247,7 +272,25 @@ function applyFilter() {
         return matchesSearch && matchesType && matchesDate;
     });
 
+    currentHistoryPage = 1;
     renderHistoryTable(currentDisplayedData);
+}
+
+function getIssueDepartment(item) {
+    if (resolveMovementType(item) !== 'issue') return '-';
+    return item.to_department || item.to_location_name || 'ບໍ່ລະບຸພະແນກ';
+}
+
+function getReturnCondition(item) {
+    if (resolveMovementType(item) !== 'return') return '-';
+    if (item.item_condition === 'good') return 'ດີ';
+    return item.item_condition ? 'ຊຳລຸດ' : 'ບໍ່ລະບຸ';
+}
+
+function getMovementNote(item) {
+    const note = item.note || '';
+    if (resolveMovementType(item) !== 'return') return note;
+    return note.replace(/\s*\(ສະພາບ:\s*(?:good|fair|damaged|broken)\)/i, '').trim();
 }
 
 function quickFilterType(type) {
@@ -266,22 +309,29 @@ function resetFilters() {
 function renderHistoryTable(data) {
     const container = document.getElementById('historyContainer');
     document.getElementById('totalFound').textContent = data.length;
+    const pageCount = Math.max(1, Math.ceil(data.length / historyPageSize));
+    currentHistoryPage = Math.min(currentHistoryPage, pageCount);
+    const pageStart = (currentHistoryPage - 1) * historyPageSize;
+    const pageData = data.slice(pageStart, pageStart + historyPageSize);
+    const pageAllSelected = pageData.length > 0 && pageData.every(item => selectedHistoryIds.has(String(item.id)));
     
     let html = `
         <table class="w-full text-sm text-left border-collapse" id="historyTable">
             <thead>
                 <tr class="bg-slate-50 border-y border-slate-100 text-slate-500 font-semibold text-xs uppercase tracking-wider">
                     <th class="py-3 px-3 w-10 text-center">
-                        <input type="checkbox" id="selectAll" onchange="toggleAllHistory()" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500">
+                        <input type="checkbox" id="selectAll" onchange="toggleAllHistory()" ${pageAllSelected ? 'checked' : ''} class="rounded border-slate-300 text-blue-600 focus:ring-blue-500">
                     </th>
                     <th class="py-3 px-3">ວັນທີ-ເວລາ</th>
                     <th class="py-3 px-3">ປະເພດ</th>
+                    <th class="py-3 px-3">ສະພາບຮັບຄືນ</th>
                     <th class="py-3 px-3">ອຸປະກອນ</th>
                     <th class="py-3 px-3">Serial Number (S/N)</th>
                     <th class="py-3 px-3 text-right">ກ່ອນໜ້າ</th>
                     <th class="py-3 px-3 text-right">ຈຳນວນ</th>
                     <th class="py-3 px-3 text-right">ຍອດໃໝ່</th>
-                    <th class="py-3 px-3">ສະຖານທີ່ / ພະແນກ</th>
+                    <th class="py-3 px-3">ພະແນກເບີກຈ່າຍ</th>
+                    <th class="py-3 px-3">ສະຖານທີ່</th>
                     <th class="py-3 px-3">ຜູ້ດຳເນີນ</th>
                     <th class="py-3 px-3">ໝາຍເຫດ</th>
                 </tr>
@@ -292,14 +342,14 @@ function renderHistoryTable(data) {
     if (data.length === 0) {
         html += `
             <tr>
-                <td colspan="11" class="text-center py-12 text-slate-400">
+                <td colspan="13" class="text-center py-12 text-slate-400">
                     <i class="fas fa-folder-open text-4xl mb-3 block text-slate-300"></i>
                     ບໍ່ມີຂໍ້ມູນປະຫວັດການເຄື່ອນໄຫວຕາມເງື່ອນໄຂທີ່ຄົ້ນຫາ
                 </td>
             </tr>
         `;
     } else {
-        data.forEach((item) => {
+        pageData.forEach((item) => {
             const mType = resolveMovementType(item);
 
             const typeLabels = {
@@ -337,7 +387,7 @@ function renderHistoryTable(data) {
             html += `
                 <tr class="hover:bg-slate-50/80 transition cursor-pointer group" onclick="toggleRow(this, event)">
                     <td class="py-3 px-3 text-center" onclick="event.stopPropagation()">
-                        <input type="checkbox" class="history-checkbox rounded border-slate-300 text-blue-600 focus:ring-blue-500" data-id="${item.id}" onchange="updateSelectAll()">
+                        <input type="checkbox" class="history-checkbox rounded border-slate-300 text-blue-600 focus:ring-blue-500" data-id="${item.id}" ${selectedHistoryIds.has(String(item.id)) ? 'checked' : ''} onchange="updateSelectAll()">
                     </td>
                     <td class="py-3 px-3 text-xs whitespace-nowrap text-slate-500 font-medium">${formatDate(item.created_at)}</td>
                     <td class="py-3 px-3">
@@ -345,6 +395,7 @@ function renderHistoryTable(data) {
                             <i class="fas ${type.icon} text-[10px]"></i> ${type.label}
                         </span>
                     </td>
+                    <td class="py-3 px-3 text-xs font-medium ${mType === 'return' ? 'text-slate-700' : 'text-slate-400'}">${escapeHtml(getReturnCondition(item))}</td>
                     <td class="py-3 px-3 font-medium text-slate-800">
                         ${escapeHtml(item.item_name || 'ບໍ່ລະບຸອຸປະກອນ')}
                         ${item.item_code ? `<span class="text-xs text-slate-400 block font-normal">#${escapeHtml(item.item_code)}</span>` : ''}
@@ -355,9 +406,10 @@ function renderHistoryTable(data) {
                     <td class="py-3 px-3 text-right font-mono ${qtyClass}">${qtyPrefix}${formatNumber(item.quantity)}</td>
                     
                     <td class="py-3 px-3 text-right font-mono text-blue-600 font-semibold">${formatNumber(item.new_quantity ?? 0)}</td>
+                    <td class="py-3 px-3 text-xs text-slate-700 font-medium">${escapeHtml(getIssueDepartment(item))}</td>
                     <td class="py-3 px-3 text-xs text-slate-500">${locationInfo || '-'}</td>
                     <td class="py-3 px-3 text-xs text-slate-500">${escapeHtml(item.created_by_name || 'Admin')}</td>
-                    <td class="py-3 px-3 text-xs text-slate-400 max-w-[160px] truncate" title="${escapeHtml(item.note)}">${escapeHtml(item.note || '-')}</td>
+                    <td class="py-3 px-3 text-xs text-slate-400 max-w-[160px] truncate" title="${escapeHtml(getMovementNote(item))}">${escapeHtml(getMovementNote(item) || '-')}</td>
                 </tr>
             `;
         });
@@ -380,10 +432,24 @@ function renderHistoryTable(data) {
             </div>
             <span id="selectedCount" class="text-xs font-medium text-slate-400">ເລືອກ 0 ລາຍການ</span>
         </div>
+        <div class="mt-4 pt-3 flex items-center justify-between gap-3 no-print border-t border-slate-100 text-xs text-slate-500">
+            <span>ສະແດງ ${data.length ? pageStart + 1 : 0}-${Math.min(pageStart + historyPageSize, data.length)} ຈາກ ${data.length} ລາຍການ (15 ລາຍການ/ໜ້າ)</span>
+            <div class="flex items-center gap-2">
+                <button type="button" onclick="changeHistoryPage(currentHistoryPage - 1)" ${currentHistoryPage <= 1 ? 'disabled' : ''} class="px-3 py-1.5 border rounded-lg enabled:hover:bg-slate-50 disabled:opacity-40">ກ່ອນໜ້າ</button>
+                <span>ໜ້າ ${currentHistoryPage} / ${pageCount}</span>
+                <button type="button" onclick="changeHistoryPage(currentHistoryPage + 1)" ${currentHistoryPage >= pageCount ? 'disabled' : ''} class="px-3 py-1.5 border rounded-lg enabled:hover:bg-slate-50 disabled:opacity-40">ຖັດໄປ</button>
+            </div>
+        </div>
     `;
     
     container.innerHTML = html;
     updateSelectedCount();
+}
+
+function changeHistoryPage(page) {
+    const pageCount = Math.max(1, Math.ceil(currentDisplayedData.length / historyPageSize));
+    currentHistoryPage = Math.min(Math.max(1, page), pageCount);
+    renderHistoryTable(currentDisplayedData);
 }
 
 function formatDate(datetime) {
@@ -407,7 +473,11 @@ function escapeHtml(text) {
 
 function toggleAllHistory() {
     const checked = document.getElementById('selectAll').checked;
-    document.querySelectorAll('.history-checkbox').forEach(cb => cb.checked = checked);
+    document.querySelectorAll('.history-checkbox').forEach(cb => {
+        cb.checked = checked;
+        if (checked) selectedHistoryIds.add(String(cb.dataset.id));
+        else selectedHistoryIds.delete(String(cb.dataset.id));
+    });
     updateSelectedCount();
 }
 
@@ -415,6 +485,10 @@ function updateSelectAll() {
     const checkboxes = document.querySelectorAll('.history-checkbox');
     const checked = document.querySelectorAll('.history-checkbox:checked');
     const selectAll = document.getElementById('selectAll');
+    checkboxes.forEach(cb => {
+        if (cb.checked) selectedHistoryIds.add(String(cb.dataset.id));
+        else selectedHistoryIds.delete(String(cb.dataset.id));
+    });
     if (selectAll) {
         selectAll.checked = checkboxes.length === checked.length && checkboxes.length > 0;
     }
@@ -422,23 +496,18 @@ function updateSelectAll() {
 }
 
 function updateSelectedCount() {
-    const count = document.querySelectorAll('.history-checkbox:checked').length;
     const el = document.getElementById('selectedCount');
-    if (el) el.textContent = `ເລືອກ ${count} ລາຍການ`;
+    if (el) el.textContent = `ເລືອກ ${selectedHistoryIds.size} ລາຍການ`;
 }
 
 function selectAllHistory() {
-    document.querySelectorAll('.history-checkbox').forEach(cb => cb.checked = true);
-    const selectAll = document.getElementById('selectAll');
-    if (selectAll) selectAll.checked = true;
-    updateSelectedCount();
+    currentDisplayedData.forEach(item => selectedHistoryIds.add(String(item.id)));
+    renderHistoryTable(currentDisplayedData);
 }
 
 function deselectAllHistory() {
-    document.querySelectorAll('.history-checkbox').forEach(cb => cb.checked = false);
-    const selectAll = document.getElementById('selectAll');
-    if (selectAll) selectAll.checked = false;
-    updateSelectedCount();
+    selectedHistoryIds.clear();
+    renderHistoryTable(currentDisplayedData);
 }
 
 function toggleRow(row, event) {
@@ -465,8 +534,7 @@ function printFilteredHistory() {
 }
 
 function printSelectedHistory() {
-    const selected = document.querySelectorAll('.history-checkbox:checked');
-    if (selected.length === 0) {
+    if (selectedHistoryIds.size === 0) {
         Swal.fire({
             icon: 'warning',
             title: 'ກະລຸນາເລືອກລາຍການ',
@@ -476,10 +544,63 @@ function printSelectedHistory() {
         return;
     }
     
-    const selectedIds = Array.from(selected).map(cb => String(cb.dataset.id));
-    const selectedData = currentDisplayedData.filter(item => selectedIds.includes(String(item.id)));
+    const selectedData = currentDisplayedData.filter(item => selectedHistoryIds.has(String(item.id)));
     
     printHistoryData(selectedData, 'ປະຫວັດການເຄື່ອນໄຫວອຸປະກອນ (ຕາມທີ່ເລືອກ)');
+}
+
+function exportHistoryExcel() {
+    if (currentDisplayedData.length === 0) {
+        Swal.fire({
+            icon: 'info',
+            title: 'ບໍ່ມີຂໍ້ມູນ',
+            text: 'ບໍ່ມີຂໍ້ມູນຕາມເງື່ອນໄຂຄົ້ນຫາສຳລັບສົ່ງອອກ',
+            confirmColor: '#3b82f6'
+        });
+        return;
+    }
+
+    const safeCell = value => {
+        let text = String(value ?? '');
+        if (/^\s*[=+@-]/.test(text)) text = "'" + text;
+        return escapeHtml(text);
+    };
+    const typeDisplayNames = {
+        receive: 'ຮັບເຂົ້າ / ເພີ່ມໃໝ່', issue: 'ເບີກຈ່າຍ', transfer: 'ຍົກຍ້າຍອຸປະກອນ',
+        return: 'ຮັບຄືນ', count: 'ນັບອຸປະກອນ / ແກ້ໄຂ', dispose: 'ຊຳລະ / ສະສາງ'
+    };
+    const detailRows = currentDisplayedData.map((item, index) => {
+        const type = resolveMovementType(item);
+        const addition = type === 'receive' || type === 'return';
+        const deduction = type === 'issue' || type === 'dispose';
+        const quantity = (addition ? '+' : deduction ? '-' : '') + (Number(item.quantity) || 0);
+        const locations = [item.from_location_name || item.from_department, item.to_location_name || item.to_department].filter(Boolean).join(' -> ');
+        return `<tr>
+            <td>${index + 1}</td><td>${safeCell(formatDate(item.created_at))}</td><td>${safeCell(typeDisplayNames[type] || type)}</td>
+            <td>${safeCell(item.item_name || '')}${item.item_code ? '<br>ລະຫັດ: ' + safeCell(item.item_code) : ''}</td>
+            <td>${safeCell(item.display_serial_number || '')}</td><td>${Number(item.old_quantity) || 0}</td><td>${quantity}</td><td>${Number(item.new_quantity) || 0}</td>
+            <td>${safeCell(getReturnCondition(item))}</td><td>${safeCell(getIssueDepartment(item))}</td><td>${safeCell(locations)}</td><td>${safeCell(item.created_by_name || 'Admin')}</td><td>${safeCell(getMovementNote(item))}</td>
+        </tr>`;
+    }).join('');
+    const workbookHtml = `<!DOCTYPE html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="UTF-8"><style>
+        body{font-family:'Phetsarath OT','Noto Sans Lao',Arial,sans-serif;color:#111}.report{border-collapse:collapse;width:100%;margin-bottom:18px}.report th,.report td{border:1px solid #111;padding:6px;vertical-align:top}.report th{text-align:center;background:#e8eef5}.letterhead{text-align:center;font-weight:bold;line-height:1.7}.school{text-align:center;font-weight:bold;padding:6px}.title{text-align:center;font-size:18px;font-weight:bold;padding:12px}.meta{border:0!important;font-size:12px;padding:8px}.section{font-weight:bold;padding:10px 0 4px}.text-cell{mso-number-format:'\\@';}
+        </style></head><body>
+        <table class="report"><tr><td colspan="13" class="letterhead" style="border:0">ສາທາລະນະລັດ ປະຊາທິປະໄຕ ປະຊາຊົນລາວ<br>ສັນຕິພາບ ເອກະລາດ ປະຊາທິປະໄຕ ເອກະພາບ ວັດທະນາຖາວອນ</td></tr>
+        <tr><td colspan="13" class="school" style="border:0">${safeCell(movementReportHeader.schoolName)}</td></tr>
+        <tr><td colspan="13" class="title" style="border:0">ລາຍງານປະຫວັດການເຄື່ອນໄຫວອຸປະກອນ<br><span style="font-size:13px">Stock Movement Report</span></td></tr>
+        <tr><td colspan="6" class="meta">ວັນທີພິມ: ${new Date().toLocaleDateString('lo-LA')}</td><td colspan="7" class="meta" style="text-align:right">ລວມ ${currentDisplayedData.length} ລາຍການ</td></tr></table>
+        <div class="section">ລາຍລະອຽດປະຫວັດ</div><table class="report"><thead><tr><th>ລ/ດ</th><th>ວັນທີ-ເວລາ</th><th>ປະເພດ</th><th>ສະພາບຮັບຄືນ</th><th>ອຸປະກອນ</th><th>Serial Number</th><th>ກ່ອນໜ້າ</th><th>ຈຳນວນ</th><th>ຍອດໃໝ່</th><th>ພະແນກເບີກຈ່າຍ</th><th>ສະຖານທີ່</th><th>ຜູ້ດຳເນີນ</th><th>ໝາຍເຫດ</th></tr></thead><tbody>${detailRows}</tbody></table>
+        </body></html>`;
+
+    const blob = new Blob(['\uFEFF', workbookHtml], { type: 'application/vnd.ms-excel;charset=utf-8' });
+    const downloadUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = 'stock_movement_' + new Date().toISOString().slice(0, 10) + '.xls';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(downloadUrl);
 }
 
 function printHistoryData(data, title) {
@@ -522,14 +643,16 @@ function printHistoryData(data, title) {
                 <td style="text-align:center;">${index + 1}</td>
                 <td>${formatDate(item.created_at)}</td>
                 <td><span class="badge ${type.class}">${type.label}</span></td>
+                <td>${escapeHtml(getReturnCondition(item))}</td>
                 <td>${escapeHtml(item.item_name || '-')}</td>
                 <td style="font-family:monospace;color:#2563eb;">${escapeHtml(serialNo)}</td>
                 <td style="text-align:right;color:#64748b;">${formatNumber(item.old_quantity ?? 0)}</td>
                 <td style="text-align:right;font-weight:bold;">${qtyPrefix}${formatNumber(item.quantity)}</td>
                 <td style="text-align:right;font-weight:bold;color:#2563eb;">${formatNumber(item.new_quantity ?? 0)}</td>
+                <td>${escapeHtml(getIssueDepartment(item))}</td>
                 <td>${escapeHtml(locationInfo || '-')}</td>
                 <td>${escapeHtml(item.created_by_name || 'Admin')}</td>
-                <td>${escapeHtml(item.note || '-')}</td>
+                <td>${escapeHtml(getMovementNote(item) || '-')}</td>
             </tr>
         `;
     });
@@ -541,11 +664,15 @@ function printHistoryData(data, title) {
             <title>${escapeHtml(title)}</title>
             <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Lao:wght@400;700&display=swap" rel="stylesheet">
             <style>
+                @page { size: A4 landscape; margin: 10mm; }
                 body { font-family: 'Noto Sans Lao', sans-serif; padding: 20px; color: #1e293b; }
-                .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0; padding-bottom: 12px; }
-                .header h2 { margin: 0; font-size: 20px; color: #0f172a; }
+                .nation, .school { text-align: center; font-weight: 700; line-height: 1.7; }
+                .logo { text-align: center; margin: 8px 0; }
+                .logo img { height: 58px; max-width: 90px; object-fit: contain; }
+                .header { text-align: center; margin-bottom: 14px; border-bottom: 1px solid #111; padding-bottom: 10px; }
+                .header h2 { margin: 8px 0; font-size: 18px; color: #0f172a; }
                 .header p { margin: 4px 0 0; font-size: 12px; color: #64748b; }
-                table { width: 100%; border-collapse: collapse; font-size: 11px; }
+                table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 16px; }
                 th, td { border: 1px solid #cbd5e1; padding: 6px 8px; text-align: left; }
                 th { background: #f8fafc; font-weight: 700; color: #334155; }
                 .badge { padding: 2px 6px; border-radius: 9999px; font-size: 10px; font-weight: 600; display: inline-block; }
@@ -559,22 +686,28 @@ function printHistoryData(data, title) {
             </style>
         </head>
         <body>
+            <div class="nation">ສາທາລະນະລັດ ປະຊາທິປະໄຕ ປະຊາຊົນລາວ<br>ສັນຕິພາບ ເອກະລາດ ປະຊາທິປະໄຕ ເອກະພາບ ວັດທະນາຖາວອນ</div>
+            ${movementReportHeader.logoData ? `<div class="logo"><img src="${movementReportHeader.logoData}" alt="Logo"></div>` : ''}
+            <div class="school">${escapeHtml(movementReportHeader.schoolName)}</div>
             <div class="header">
                 <h2>${escapeHtml(title)}</h2>
                 <p>ວັນທີພິມ: ${new Date().toLocaleDateString('lo-LA')} ${new Date().toLocaleTimeString('lo-LA')}</p>
                 <p>ຈຳນວນລາຍການ: ${data.length}</p>
             </div>
+            <h3>ລາຍລະອຽດການເຄື່ອນໄຫວ</h3>
             <table>
                 <thead>
                     <tr>
-                        <th style="text-align:center;width:35px;">ລຳ</th>
+                        <th style="text-align:center;width:35px;">ລຳດັບ</th>
                         <th>ວັນທີ</th>
                         <th>ປະເພດ</th>
+                        <th>ສະພາບຮັບຄືນ</th>
                         <th>ອຸປະກອນ</th>
                         <th>Serial Number</th>
                         <th style="text-align:right;">ກ່ອນໜ້າ</th>
                         <th style="text-align:right;">ຈຳນວນ</th>
                         <th style="text-align:right;">ຍອດໃໝ່</th>
+                        <th>ພະແນກເບີກຈ່າຍ</th>
                         <th>ສະຖານທີ່</th>
                         <th>ຜູ້ດຳເນີນ</th>
                         <th>ໝາຍເຫດ</th>

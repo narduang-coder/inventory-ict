@@ -27,9 +27,9 @@ if (!$req) {
 
 // ດຶງລາຍການອຸປະກອນ
 $stmtItems = $pdo->prepare("
-    SELECT ri.*, i.name as item_name, i.unit 
-    FROM request_items ri 
-    JOIN items i ON ri.item_id = i.id 
+    SELECT ri.*, i.name as item_name, i.unit, i.serial_number
+    FROM request_items ri
+    JOIN items i ON ri.item_id = i.id
     WHERE ri.request_id = ?
 ");
 $stmtItems->execute([$req_id]);
@@ -94,6 +94,7 @@ try {
             <tr>
                 <th style="width: 50px; text-align: center;">ລຳດັບ</th>
                 <th>ລາຍການອຸປະກອນ</th>
+                <th style="width: 160px; text-align: center;">Serial Number</th>
                 <th style="width: 100px; text-align: center;">ຈຳນວນ</th>
                 <th style="width: 100px; text-align: center;">ໜ່ວຍນັບ</th>
             </tr>
@@ -103,6 +104,9 @@ try {
                 <tr>
                     <td style="text-align: center;"><?php echo $idx + 1; ?></td>
                     <td><?php echo htmlspecialchars($item['item_name']); ?></td>
+                    <td style="text-align: center; font-family: monospace;">
+                        <?php echo htmlspecialchars(!empty($item['serial_number']) ? $item['serial_number'] : '-'); ?>
+                    </td>
                     <td style="text-align: center; font-weight: bold;"><?php echo number_format($item['quantity']); ?></td>
                     <td style="text-align: center;"><?php echo htmlspecialchars($item['unit']); ?></td>
                 </tr>

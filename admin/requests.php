@@ -1,10 +1,18 @@
 <?php
 require_once __DIR__ . '/../includes/config.php';
+require_once __DIR__ . '/../includes/attachments.php';
 checkRole(['admin']);
 // admin_request.php - ຈັດການຄຳຂໍເບີກ ແລະ ຄຳຂໍສົ່ງຄືນອຸປະກອນ
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
+}
+
+$stockMovementHasCondition = false;
+try {
+    $stockMovementHasCondition = (bool)$pdo->query("SHOW COLUMNS FROM stock_movements LIKE 'item_condition'")->fetch();
+} catch (Exception $e) {
+    $stockMovementHasCondition = false;
 }
 
 // ============================================================
@@ -199,22 +207,42 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
                 // 7. ບັນທຶກປະຫວັດການເຄື່ອນໄຫວລົງ stock_movements
                 $note = "ຮັບຄືນອຸປະກອນລະຫັດ: {$returnReq['item_code']} ຈາກພະແນກ: {$returnReq['department']} (ສະພາບ: {$returnReq['item_condition']})" . ($admin_note ? " - {$admin_note}" : "");
-                $stMovement = $pdo->prepare("
-                    INSERT INTO stock_movements (
-                        item_id, movement_type, quantity, old_quantity, new_quantity, 
-                        from_department, serial_number, note, created_by, created_at
-                    ) VALUES (?, 'return', ?, ?, ?, ?, ?, ?, ?, NOW())
-                ");
-                $stMovement->execute([
-                    $target_item_id,
-                    $return_qty,
-                    $old_qty,
-                    $new_qty,
-                    $returnReq['department'],
-                    $serial_number,
-                    $note,
-                    $_SESSION['user_id'] ?? null
-                ]);
+                if ($stockMovementHasCondition) {
+                    $stMovement = $pdo->prepare("
+                        INSERT INTO stock_movements (
+                            item_id, movement_type, item_condition, quantity, old_quantity, new_quantity, 
+                            from_department, serial_number, note, created_by, created_at
+                        ) VALUES (?, 'return', ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                    ");
+                    $stMovement->execute([
+                        $target_item_id,
+                        $returnReq['item_condition'] ?? null,
+                        $return_qty,
+                        $old_qty,
+                        $new_qty,
+                        $returnReq['department'],
+                        $serial_number,
+                        $note,
+                        $_SESSION['user_id'] ?? null
+                    ]);
+                } else {
+                    $stMovement = $pdo->prepare("
+                        INSERT INTO stock_movements (
+                            item_id, movement_type, quantity, old_quantity, new_quantity, 
+                            from_department, serial_number, note, created_by, created_at
+                        ) VALUES (?, 'return', ?, ?, ?, ?, ?, ?, ?, NOW())
+                    ");
+                    $stMovement->execute([
+                        $target_item_id,
+                        $return_qty,
+                        $old_qty,
+                        $new_qty,
+                        $returnReq['department'],
+                        $serial_number,
+                        $note,
+                        $_SESSION['user_id'] ?? null
+                    ]);
+                }
 
                 // 8. ອັບເດດສະຖານະໃນ item_issuances ເປັນ 'returned'
                 if (!empty($returnReq['issuance_id'])) {
@@ -241,7 +269,38 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             if (function_exists('showAlert')) showAlert('ເກີດຂໍ້ຜິດພາດ ກະລຸນາລອງໃໝ່', 'error');
         }
 
-        echo "<script>window.location.href = '?admin=requests&tab=returns';</script>";
+        $return_page = max(1, (int)($_POST['return_page'] ?? 1));
+        $return_search = trim($_POST['return_search'] ?? '');
+        $redirect_url = '?admin=requests&tab=returns&return_page=' . $return_page . '&return_search=' . rawurlencode($return_search);
+        echo '<script>window.location.href = ' . json_encode($redirect_url) . ';</script>';
+        exit();
+    }
+
+    if (isset($_POST['action_reject_return'])) {
+        $csrf_token = $_POST['csrf_token'] ?? '';
+        if (function_exists('verifyCSRFToken') && !verifyCSRFToken($csrf_token)) {
+            if (function_exists('showAlert')) showAlert('ຂໍ້ມູນບໍ່ປອດໄພ (CSRF Token Invalid)', 'error');
+            echo '<script>window.location.href = "?admin=requests&tab=returns";</script>';
+            exit();
+        }
+
+        $return_id = (int)($_POST['return_id'] ?? 0);
+        $admin_note = trim($_POST['admin_note'] ?? '');
+        try {
+            $stmt = $pdo->prepare("\n                UPDATE return_requests\n                SET status = 'rejected',\n                    reason = CONCAT(IFNULL(reason, ''), IF(? = '', '', CONCAT(' [Admin rejected: ', ?, ']')))\n                WHERE id = ? AND status = 'pending'\n            ");
+            $stmt->execute([$admin_note, $admin_note, $return_id]);
+            if ($stmt->rowCount() !== 1) {
+                throw new RuntimeException('Return request not found or already processed');
+            }
+            if (function_exists('showAlert')) showAlert('ປະຕິເສດຄຳຂໍສົ່ງຄືນສຳເລັດ', 'success');
+        } catch (Exception $e) {
+            if (function_exists('showAlert')) showAlert('ບໍ່ສາມາດປະຕິເສດຄຳຂໍໄດ້ ລາຍການອາດຖືກດຳເນີນການແລ້ວ', 'error');
+        }
+
+        $return_page = max(1, (int)($_POST['return_page'] ?? 1));
+        $return_search = trim($_POST['return_search'] ?? '');
+        $redirect_url = '?admin=requests&tab=returns&return_page=' . $return_page . '&return_search=' . rawurlencode($return_search);
+        echo '<script>window.location.href = ' . json_encode($redirect_url) . ';</script>';
         exit();
     }
 }
@@ -250,8 +309,44 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 // 2. ດຶງຂໍ້ມູນຄຳຂໍ
 // ============================================================
 $pending  = $pdo->query("SELECT r.*, u.fullname FROM requests r JOIN users u ON r.user_id = u.id WHERE r.status = 'pending' ORDER BY r.created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
-$approved = $pdo->query("SELECT r.*, u.fullname FROM requests r JOIN users u ON r.user_id = u.id WHERE r.status = 'approved' ORDER BY r.created_at DESC LIMIT 20")->fetchAll(PDO::FETCH_ASSOC);
+$approved_search = trim($_GET['approved_search'] ?? '');
+$approved_page = max(1, (int)($_GET['approved_page'] ?? 1));
+$approved_page_size = 10;
+$approved_where = "WHERE r.status = 'approved'";
+$approved_params = [];
+if ($approved_search !== '') {
+    $approved_where .= " AND (CAST(r.id AS CHAR) LIKE ? OR u.fullname LIKE ? OR r.purpose LIKE ? OR r.department LIKE ?)";
+    $approved_like = '%' . $approved_search . '%';
+    $approved_params = array_fill(0, 4, $approved_like);
+}
+$approvedCountStmt = $pdo->prepare("SELECT COUNT(*) FROM requests r JOIN users u ON r.user_id = u.id {$approved_where}");
+$approvedCountStmt->execute($approved_params);
+$approved_total = (int)$approvedCountStmt->fetchColumn();
+$approved_page_count = max(1, (int)ceil($approved_total / $approved_page_size));
+$approved_page = min($approved_page, $approved_page_count);
+$approved_offset = ($approved_page - 1) * $approved_page_size;
+$approvedStmt = $pdo->prepare("SELECT r.*, u.fullname FROM requests r JOIN users u ON r.user_id = u.id {$approved_where} ORDER BY r.created_at DESC LIMIT {$approved_page_size} OFFSET {$approved_offset}");
+$approvedStmt->execute($approved_params);
+$approved = $approvedStmt->fetchAll(PDO::FETCH_ASSOC);
 $rejected = $pdo->query("SELECT r.*, u.fullname FROM requests r JOIN users u ON r.user_id = u.id WHERE r.status = 'rejected' ORDER BY r.created_at DESC LIMIT 20")->fetchAll(PDO::FETCH_ASSOC);
+
+$return_search = trim($_GET['return_search'] ?? '');
+$return_page = max(1, (int)($_GET['return_page'] ?? 1));
+$return_page_size = 10;
+$return_where = "WHERE rr.status = 'pending'";
+$return_params = [];
+if ($return_search !== '') {
+    $return_where .= " AND (u.fullname LIKE ? OR rr.department LIKE ? OR i.name LIKE ? OR i.item_code LIKE ? OR i.serial_number LIKE ? OR rr.reason LIKE ?)";
+    $search_like = '%' . $return_search . '%';
+    $return_params = array_fill(0, 6, $search_like);
+}
+
+$returnCountStmt = $pdo->prepare("\n    SELECT COUNT(*)\n    FROM return_requests rr\n    LEFT JOIN items i ON rr.item_id = i.id\n    LEFT JOIN users u ON rr.user_id = u.id\n    {$return_where}\n");
+$returnCountStmt->execute($return_params);
+$return_total = (int)$returnCountStmt->fetchColumn();
+$return_page_count = max(1, (int)ceil($return_total / $return_page_size));
+$return_page = min($return_page, $return_page_count);
+$return_offset = ($return_page - 1) * $return_page_size;
 
 $sqlReturns = "
     SELECT 
@@ -264,10 +359,13 @@ $sqlReturns = "
     FROM return_requests rr
     LEFT JOIN items i ON rr.item_id = i.id
     LEFT JOIN users u ON rr.user_id = u.id
-    WHERE rr.status = 'pending'
+    {$return_where}
     ORDER BY rr.created_at DESC
+    LIMIT {$return_page_size} OFFSET {$return_offset}
 ";
-$return_requests = $pdo->query($sqlReturns)->fetchAll(PDO::FETCH_ASSOC);
+$returnStmt = $pdo->prepare($sqlReturns);
+$returnStmt->execute($return_params);
+$return_requests = $returnStmt->fetchAll(PDO::FETCH_ASSOC);
 
 function getRequestItems($pdo, $request_id) {
     $stmt = $pdo->prepare("SELECT ri.*, i.name, i.unit, i.serial_number FROM request_items ri JOIN items i ON ri.item_id = i.id WHERE ri.request_id = ?");
@@ -277,18 +375,23 @@ function getRequestItems($pdo, $request_id) {
 
 $all_requests_detail = [];
 $all_list = array_merge($pending, $approved, $rejected);
+$attachmentStmt = $pdo->prepare("SELECT id, original_filename, file_path, mime_type, file_size FROM request_attachments WHERE request_id = ? ORDER BY id ASC");
 foreach ($all_list as $req) {
     $items = getRequestItems($pdo, $req['id']);
+    $attachmentStmt->execute([$req['id']]);
+    $attachments = $attachmentStmt->fetchAll(PDO::FETCH_ASSOC);
     $formatted_date = function_exists('formatDate') ? formatDate($req['request_date']) : $req['request_date'];
     
     $all_requests_detail[$req['id']] = [
         'id'           => $req['id'],
         'fullname'     => $req['fullname'],
+        'department'   => $req['department'] ?? '',
         'purpose'      => $req['purpose'],
         'status'       => $req['status'],
         'request_date' => $formatted_date,
         'admin_note'   => $req['admin_note'] ?? '',
-        'items'        => $items
+        'items'        => $items,
+        'attachments'  => $attachments
     ];
 }
 
@@ -315,10 +418,10 @@ $tab = isset($_GET['tab']) ? $_GET['tab'] : 'pending';
         ລໍຖ້າອະນຸມັດເບີກ (<?php echo count($pending); ?>)
     </button>
     <button onclick="switchTab('returns')" class="px-4 py-2 font-medium whitespace-nowrap <?php echo $tab == 'returns' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'; ?>">
-        <i class="fas fa-rotate-left mr-1"></i>ຄຳຂໍສົ່ງຄືນ (<?php echo count($return_requests); ?>)
+        <i class="fas fa-rotate-left mr-1"></i>ຄຳຂໍສົ່ງຄືນ (<?php echo $return_total; ?>)
     </button>
     <button onclick="switchTab('approved')" class="px-4 py-2 font-medium whitespace-nowrap <?php echo $tab == 'approved' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'; ?>">
-        ອະນຸມັດເບີກແລ້ວ (<?php echo count($approved); ?>)
+        ອະນຸມັດເບີກແລ້ວ (<?php echo $approved_total; ?>)
     </button>
     <button onclick="switchTab('rejected')" class="px-4 py-2 font-medium whitespace-nowrap <?php echo $tab == 'rejected' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'; ?>">
         ປະຕິເສດເບີກ (<?php echo count($rejected); ?>)
@@ -340,6 +443,7 @@ $tab = isset($_GET['tab']) ? $_GET['tab'] : 'pending';
                             <span class="text-xs px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full">ລໍຖ້າອະນຸມັດ</span>
                         </div>
                         <h3 class="text-lg font-bold text-gray-800"><?php echo htmlspecialchars($request['fullname']); ?></h3>
+                        <p class="text-xs text-indigo-700 mt-1"><i class="fas fa-building mr-1"></i>ພະແນກ: <?php echo htmlspecialchars($request['department'] ?? 'ບໍ່ລະບຸ'); ?></p>
                         <p class="text-sm text-gray-600"><?php echo htmlspecialchars($request['purpose']); ?></p>
                         <p class="text-xs text-gray-400 mt-1">ວັນທີ: <?php echo htmlspecialchars($display_date); ?></p>
                     </div>
@@ -363,12 +467,15 @@ $tab = isset($_GET['tab']) ? $_GET['tab'] : 'pending';
                         <?php endforeach; ?>
                     </div>
                     
-                    <div class="mt-3 flex gap-2">
+                    <div class="mt-3 flex flex-wrap gap-2">
                         <button onclick="updateStatus(<?php echo $request['id']; ?>, 'approved')" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm">
                             <i class="fas fa-check mr-1"></i>ອະນຸມັດ
                         </button>
                         <button onclick="updateStatus(<?php echo $request['id']; ?>, 'rejected')" class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 text-sm">
                             <i class="fas fa-times mr-1"></i>ປະຕິເສດ
+                        </button>
+                        <button type="button" onclick="printRequestDraft(<?php echo $request['id']; ?>)" class="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 text-sm border border-slate-200">
+                            <i class="fas fa-print mr-1"></i>ພິມໃບເບີກ
                         </button>
                     </div>
                 </div>
@@ -385,14 +492,30 @@ $tab = isset($_GET['tab']) ? $_GET['tab'] : 'pending';
 <!-- 2. ຄຳຂໍສົ່ງຄືນອຸປະກອນ -->
 <div id="tab-returns" class="<?php echo $tab != 'returns' ? 'hidden' : ''; ?>">
     <div class="card overflow-hidden bg-white rounded-xl shadow-sm border border-amber-200">
-        <div class="p-4 bg-amber-50/50 border-b border-amber-100 flex items-center justify-between">
+        <div class="p-4 bg-amber-50/50 border-b border-amber-100 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
             <h3 class="font-bold text-amber-900 flex items-center gap-2">
                 <i class="fas fa-rotate-left text-amber-600"></i>
                 ລາຍການຄຳຂໍສົ່ງຄືນອຸປະກອນ (ລໍຖ້າອະນຸມັດ)
             </h3>
-            <span class="bg-amber-200 text-amber-800 text-xs px-2.5 py-0.5 rounded-full font-bold">
-                <?php echo count($return_requests); ?> ລາຍການ
-            </span>
+            <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+                <span class="bg-amber-200 text-amber-800 text-xs px-2.5 py-1 rounded-full font-bold text-center">
+                    <?php echo $return_total; ?> ລາຍການ
+                </span>
+                <form method="GET" class="flex items-center gap-2">
+                    <input type="hidden" name="admin" value="requests">
+                    <input type="hidden" name="tab" value="returns">
+                    <input type="hidden" name="return_page" value="1">
+                    <input type="search" name="return_search" value="<?php echo htmlspecialchars($return_search, ENT_QUOTES, 'UTF-8'); ?>" placeholder="ຄົ້ນຫາຜູ້ສົ່ງ, ອຸປະກອນ, ພະແນກ..." class="w-full sm:w-72 px-3 py-2 border border-amber-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-300">
+                    <button type="submit" class="px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm" title="ຄົ້ນຫາ">
+                        <i class="fas fa-search"></i>
+                    </button>
+                    <?php if ($return_search !== ''): ?>
+                        <a href="?admin=requests&amp;tab=returns" class="px-3 py-2 border border-amber-200 text-amber-800 hover:bg-amber-100 rounded-lg text-sm" title="ລ້າງຄົ້ນຫາ">
+                            <i class="fas fa-times"></i>
+                        </a>
+                    <?php endif; ?>
+                </form>
+            </div>
         </div>
         <div class="overflow-x-auto">
             <table class="w-full text-left border-collapse">
@@ -464,33 +587,79 @@ $tab = isset($_GET['tab']) ? $_GET['tab'] : 'pending';
                                     <span class="px-2.5 py-1 text-xs rounded-full bg-amber-100 text-amber-700 font-semibold animate-pulse">⏳ ລໍຖ້າອະນຸມັດ</span>
                                 </td>
                                 <td class="p-4 text-center">
-                                    <button onclick="openApproveReturnModal(<?php echo $ret['id']; ?>, '<?php echo htmlspecialchars($ret['item_name'], ENT_QUOTES); ?>', <?php echo (int)$ret['quantity']; ?>, '<?php echo $ret['item_condition']; ?>')" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition shadow-sm flex items-center gap-1 mx-auto">
-                                        <i class="fas fa-check-circle"></i> ອະນຸມັດຮັບຄືນ
-                                    </button>
+                                    <div class="flex flex-col sm:flex-row items-center justify-center gap-2">
+                                        <button onclick="openApproveReturnModal(<?php echo (int)$ret['id']; ?>, <?php echo htmlspecialchars(json_encode($ret['item_name'] ?? '', JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_TAG | JSON_HEX_AMP), ENT_QUOTES, 'UTF-8'); ?>, <?php echo (int)$ret['quantity']; ?>)" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition shadow-sm flex items-center gap-1">
+                                            <i class="fas fa-check-circle"></i> ອະນຸມັດ
+                                        </button>
+                                        <button type="button" onclick="openRejectReturnModal(<?php echo (int)$ret['id']; ?>)" class="bg-rose-600 hover:bg-rose-700 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition shadow-sm flex items-center gap-1">
+                                            <i class="fas fa-times-circle"></i> ປະຕິເສດ
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
                     <?php else: ?>
                         <tr>
-                            <td colspan="8" class="p-8 text-center text-gray-400">ບໍ່ມີຄຳຂໍສົ່ງຄືນອຸປະກອນທີ່ລໍຖ້າອະນຸມັດ</td>
+                            <td colspan="8" class="p-8 text-center text-gray-400">
+                                <div class="flex flex-col items-center gap-3">
+                                    <span><?php echo $return_search !== '' ? 'ບໍ່ມີຂໍ້ມູນ' : 'ບໍ່ມີຄຳຂໍສົ່ງຄືນອຸປະກອນທີ່ລໍຖ້າອະນຸມັດ'; ?></span>
+                                    <?php if ($return_search !== ''): ?>
+                                        <a href="?admin=requests&amp;tab=returns" class="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50">
+                                            <i class="fas fa-arrow-left"></i> ກັບຄືນ
+                                        </a>
+                                    <?php endif; ?>
+                                </div>
+                            </td>
                         </tr>
                     <?php endif; ?>
                 </tbody>
             </table>
         </div>
+        <?php if ($return_total > 0): ?>
+            <div class="p-4 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-gray-600">
+                <span>ສະແດງ <?php echo $return_offset + 1; ?>-<?php echo min($return_offset + $return_page_size, $return_total); ?> ຈາກ <?php echo $return_total; ?> ລາຍການ (10 ລາຍການ/ໜ້າ)</span>
+                <div class="flex items-center gap-2">
+                    <?php if ($return_page > 1): ?>
+                        <a href="?admin=requests&amp;tab=returns&amp;return_page=<?php echo $return_page - 1; ?>&amp;return_search=<?php echo rawurlencode($return_search); ?>" class="px-3 py-1.5 border rounded-lg hover:bg-gray-50">ກ່ອນໜ້າ</a>
+                    <?php else: ?>
+                        <span class="px-3 py-1.5 border rounded-lg text-gray-300">ກ່ອນໜ້າ</span>
+                    <?php endif; ?>
+                    <span class="px-2">ໜ້າ <?php echo $return_page; ?> / <?php echo $return_page_count; ?></span>
+                    <?php if ($return_page < $return_page_count): ?>
+                        <a href="?admin=requests&amp;tab=returns&amp;return_page=<?php echo $return_page + 1; ?>&amp;return_search=<?php echo rawurlencode($return_search); ?>" class="px-3 py-1.5 border rounded-lg hover:bg-gray-50">ຖັດໄປ</a>
+                    <?php else: ?>
+                        <span class="px-3 py-1.5 border rounded-lg text-gray-300">ຖັດໄປ</span>
+                    <?php endif; ?>
+                </div>
+            </div>
+        <?php endif; ?>
     </div>
 </div>
 
 <!-- 3. ອະນຸມັດເບີກແລ້ວ -->
 <div id="tab-approved" class="<?php echo $tab != 'approved' ? 'hidden' : ''; ?>">
-    <?php if (count($approved) > 0): ?>
-        <div class="card bg-white p-4 rounded-xl shadow-sm border">
+    <?php if ($approved_total > 0): ?>
+        <div class="card bg-white rounded-xl shadow-sm border overflow-hidden">
+            <div class="p-4 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <span class="text-sm font-semibold text-gray-700"><?php echo $approved_total; ?> ລາຍການທີ່ອະນຸມັດ</span>
+                <form method="GET" class="flex items-center gap-2">
+                    <input type="hidden" name="admin" value="requests">
+                    <input type="hidden" name="tab" value="approved">
+                    <input type="hidden" name="approved_page" value="1">
+                    <input type="search" name="approved_search" value="<?php echo htmlspecialchars($approved_search, ENT_QUOTES, 'UTF-8'); ?>" placeholder="ຄົ້ນຫາ ID, ຜູ້ຂໍ, ຈຸດປະສົງ..." class="w-full sm:w-72 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-200">
+                    <button type="submit" class="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm" title="ຄົ້ນຫາ"><i class="fas fa-search"></i></button>
+                    <?php if ($approved_search !== ''): ?>
+                        <a href="?admin=requests&amp;tab=approved" class="px-3 py-2 border rounded-lg text-gray-600 hover:bg-gray-50" title="ລ້າງຄົ້ນຫາ"><i class="fas fa-times"></i></a>
+                    <?php endif; ?>
+                </form>
+            </div>
             <div class="overflow-x-auto">
                 <table class="w-full">
                     <thead>
                         <tr class="border-b">
                             <th class="text-left py-2 px-3 text-sm font-medium text-gray-500">ID</th>
                             <th class="text-left py-2 px-3 text-sm font-medium text-gray-500">ຜູ້ຂໍ</th>
+                            <th class="text-left py-2 px-3 text-sm font-medium text-gray-500">ພະແນກ</th>
                             <th class="text-left py-2 px-3 text-sm font-medium text-gray-500">ຈຸດປະສົງ</th>
                             <th class="text-left py-2 px-3 text-sm font-medium text-gray-500">ວັນທີ</th>
                             <th class="text-center py-2 px-3 text-sm font-medium text-gray-500">ຈັດການ</th>
@@ -503,23 +672,50 @@ $tab = isset($_GET['tab']) ? $_GET['tab'] : 'pending';
                             <tr class="border-b hover:bg-gray-50">
                                 <td class="py-2 px-3 text-sm">#<?php echo $request['id']; ?></td>
                                 <td class="py-2 px-3 text-sm font-medium"><?php echo htmlspecialchars($request['fullname']); ?></td>
+                                <td class="py-2 px-3 text-sm text-indigo-700"><?php echo htmlspecialchars($request['department'] ?? 'ບໍ່ລະບຸ'); ?></td>
                                 <td class="py-2 px-3 text-sm text-gray-600"><?php echo htmlspecialchars($request['purpose']); ?></td>
                                 <td class="py-2 px-3 text-sm text-gray-500"><?php echo htmlspecialchars($display_date); ?></td>
                                 <td class="py-2 px-3 text-sm text-center">
-                                    <button onclick="showRequestDetail(<?php echo $request['id']; ?>)" class="text-blue-600 hover:text-blue-800 font-medium">
-                                        <i class="fas fa-eye"></i> ເບິ່ງລາຍລະອຽດ
-                                    </button>
+                                    <div class="flex items-center justify-center gap-2 flex-wrap">
+                                        <button onclick="showRequestDetail(<?php echo $request['id']; ?>)" class="text-blue-600 hover:text-blue-800 font-medium">
+                                            <i class="fas fa-eye"></i> ເບິ່ງລາຍລະອຽດ
+                                        </button>
+                                        <button type="button" onclick="printRequestDraft(<?php echo $request['id']; ?>)" class="text-slate-600 hover:text-slate-800 font-medium">
+                                            <i class="fas fa-print"></i> ພິມ
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
                 </table>
             </div>
+            <div class="p-4 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-gray-600">
+                <span>ສະແດງ <?php echo $approved_offset + 1; ?>-<?php echo min($approved_offset + $approved_page_size, $approved_total); ?> ຈາກ <?php echo $approved_total; ?> ລາຍການ (10 ລາຍການ/ໜ້າ)</span>
+                <div class="flex items-center gap-2">
+                    <?php if ($approved_page > 1): ?>
+                        <a href="?admin=requests&amp;tab=approved&amp;approved_page=<?php echo $approved_page - 1; ?>&amp;approved_search=<?php echo rawurlencode($approved_search); ?>" class="px-3 py-1.5 border rounded-lg hover:bg-gray-50">ກ່ອນໜ້າ</a>
+                    <?php else: ?>
+                        <span class="px-3 py-1.5 border rounded-lg text-gray-300">ກ່ອນໜ້າ</span>
+                    <?php endif; ?>
+                    <span class="px-2">ໜ້າ <?php echo $approved_page; ?> / <?php echo $approved_page_count; ?></span>
+                    <?php if ($approved_page < $approved_page_count): ?>
+                        <a href="?admin=requests&amp;tab=approved&amp;approved_page=<?php echo $approved_page + 1; ?>&amp;approved_search=<?php echo rawurlencode($approved_search); ?>" class="px-3 py-1.5 border rounded-lg hover:bg-gray-50">ຖັດໄປ</a>
+                    <?php else: ?>
+                        <span class="px-3 py-1.5 border rounded-lg text-gray-300">ຖັດໄປ</span>
+                    <?php endif; ?>
+                </div>
+            </div>
         </div>
     <?php else: ?>
         <div class="text-center py-12 text-gray-500">
             <i class="fas fa-inbox text-4xl mb-3 block"></i>
-            <p>ບໍ່ມີຄຳຂໍເບີກທີ່ອະນຸມັດ</p>
+            <p><?php echo $approved_search !== '' ? 'ບໍ່ມີຂໍ້ມູນ' : 'ບໍ່ມີຄຳຂໍເບີກທີ່ອະນຸມັດ'; ?></p>
+            <?php if ($approved_search !== ''): ?>
+                <a href="?admin=requests&amp;tab=approved" class="inline-flex items-center gap-2 mt-3 px-3 py-2 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50">
+                    <i class="fas fa-arrow-left"></i> ກັບຄືນ
+                </a>
+            <?php endif; ?>
         </div>
     <?php endif; ?>
 </div>
@@ -534,6 +730,7 @@ $tab = isset($_GET['tab']) ? $_GET['tab'] : 'pending';
                         <tr class="border-b">
                             <th class="text-left py-2 px-3 text-sm font-medium text-gray-500">ID</th>
                             <th class="text-left py-2 px-3 text-sm font-medium text-gray-500">ຜູ້ຂໍ</th>
+                            <th class="text-left py-2 px-3 text-sm font-medium text-gray-500">ພະແນກ</th>
                             <th class="text-left py-2 px-3 text-sm font-medium text-gray-500">ຈຸດປະສົງ</th>
                             <th class="text-left py-2 px-3 text-sm font-medium text-gray-500">ໝາຍເຫດ</th>
                             <th class="text-center py-2 px-3 text-sm font-medium text-gray-500">ຈັດການ</th>
@@ -544,12 +741,18 @@ $tab = isset($_GET['tab']) ? $_GET['tab'] : 'pending';
                             <tr class="border-b hover:bg-gray-50">
                                 <td class="py-2 px-3 text-sm">#<?php echo $request['id']; ?></td>
                                 <td class="py-2 px-3 text-sm font-medium"><?php echo htmlspecialchars($request['fullname']); ?></td>
+                                <td class="py-2 px-3 text-sm text-indigo-700"><?php echo htmlspecialchars($request['department'] ?? 'ບໍ່ລະບຸ'); ?></td>
                                 <td class="py-2 px-3 text-sm text-gray-600"><?php echo htmlspecialchars($request['purpose']); ?></td>
                                 <td class="py-2 px-3 text-sm text-gray-500"><?php echo !empty($request['admin_note']) ? htmlspecialchars($request['admin_note']) : '-'; ?></td>
                                 <td class="py-2 px-3 text-sm text-center">
-                                    <button onclick="showRequestDetail(<?php echo $request['id']; ?>)" class="text-blue-600 hover:text-blue-800 font-medium">
-                                        <i class="fas fa-eye"></i> ເບິ່ງລາຍລະອຽດ
-                                    </button>
+                                    <div class="flex items-center justify-center gap-2 flex-wrap">
+                                        <button onclick="showRequestDetail(<?php echo $request['id']; ?>)" class="text-blue-600 hover:text-blue-800 font-medium">
+                                            <i class="fas fa-eye"></i> ເບິ່ງລາຍລະອຽດ
+                                        </button>
+                                        <button type="button" onclick="printRequestDraft(<?php echo $request['id']; ?>)" class="text-slate-600 hover:text-slate-800 font-medium">
+                                            <i class="fas fa-print"></i> ພິມ
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -578,7 +781,10 @@ $tab = isset($_GET['tab']) ? $_GET['tab'] : 'pending';
             
             <div id="detailModalContent" class="py-2"></div>
             
-            <div class="flex justify-end mt-6 pt-3 border-t">
+            <div class="flex justify-end mt-6 pt-3 border-t gap-2">
+                <button type="button" id="detailPrintButton" class="px-4 py-2 bg-slate-100 text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-200 text-sm font-medium">
+                    <i class="fas fa-print mr-1"></i>ພິມໃບເບີກ
+                </button>
                 <button type="button" onclick="closeDetailModal()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm font-medium">
                     ປິດ
                 </button>
@@ -632,6 +838,8 @@ $tab = isset($_GET['tab']) ? $_GET['tab'] : 'pending';
             <input type="hidden" name="csrf_token" value="<?php echo function_exists('generateCSRFToken') ? generateCSRFToken() : ''; ?>">
             <input type="hidden" name="action_approve_return" value="1">
             <input type="hidden" name="return_id" id="approve_return_id">
+            <input type="hidden" name="return_page" value="<?php echo $return_page; ?>">
+            <input type="hidden" name="return_search" value="<?php echo htmlspecialchars($return_search, ENT_QUOTES, 'UTF-8'); ?>">
 
             <p class="text-sm text-gray-600">ອຸປະກອນ: <span id="approve_item_name" class="font-bold text-gray-800"></span></p>
             <p class="text-sm text-gray-600">ຈຳນວນທີ່ຈະບວກເຂົ້າ: <span id="approve_item_qty" class="font-bold text-emerald-600"></span></p>
@@ -646,6 +854,32 @@ $tab = isset($_GET['tab']) ? $_GET['tab'] : 'pending';
                 <button type="button" onclick="document.getElementById('modalApproveReturn').classList.add('hidden')" class="px-4 py-2 border rounded-lg text-sm text-gray-600">ຍົກເລີກ</button>
                 <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm">
                     <i class="fas fa-check"></i> ຢືນຢັນອະນຸມັດ
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="modalRejectReturn" class="fixed inset-0 bg-black/50 hidden flex items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-xl max-w-sm w-full p-6 space-y-4 shadow-xl">
+        <h3 class="text-lg font-bold text-gray-800 border-b pb-2 flex items-center gap-2">
+            <i class="fas fa-circle-xmark text-rose-600"></i>
+            ຢືນຢັນການປະຕິເສດຄຳຂໍສົ່ງຄືນ
+        </h3>
+        <form method="POST" class="space-y-3">
+            <input type="hidden" name="csrf_token" value="<?php echo function_exists('generateCSRFToken') ? generateCSRFToken() : ''; ?>">
+            <input type="hidden" name="action_reject_return" value="1">
+            <input type="hidden" name="return_id" id="reject_return_id">
+            <input type="hidden" name="return_page" value="<?php echo $return_page; ?>">
+            <input type="hidden" name="return_search" value="<?php echo htmlspecialchars($return_search, ENT_QUOTES, 'UTF-8'); ?>">
+            <div>
+                <label for="reject_return_note" class="block text-xs font-semibold text-gray-600 mb-1">ເຫດຜົນການປະຕິເສດ (ຖ້າມີ)</label>
+                <textarea id="reject_return_note" name="admin_note" rows="3" class="w-full p-2 border text-sm rounded-lg" placeholder="ລະບຸເຫດຜົນ..."></textarea>
+            </div>
+            <div class="flex justify-end gap-2 pt-2 border-t">
+                <button type="button" onclick="document.getElementById('modalRejectReturn').classList.add('hidden')" class="px-4 py-2 border rounded-lg text-sm text-gray-600">ຍົກເລີກ</button>
+                <button type="submit" class="bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm">
+                    <i class="fas fa-times-circle"></i> ຢືນຢັນປະຕິເສດ
                 </button>
             </div>
         </form>
@@ -679,9 +913,43 @@ function openApproveReturnModal(id, itemName, qty, condition) {
     document.getElementById('modalApproveReturn').classList.remove('hidden');
 }
 
+function openRejectReturnModal(id) {
+    document.getElementById('reject_return_id').value = id;
+    document.getElementById('reject_return_note').value = '';
+    document.getElementById('modalRejectReturn').classList.remove('hidden');
+}
+
+function printRequestDraft(reqId) {
+    const printWindow = window.open('', '_blank', 'height=900,width=1000');
+
+    fetch(`api/get_request_print.php?id=${reqId}`)
+        .then(response => {
+            if (!response.ok) throw new Error('Request print not available');
+            return response.text();
+        })
+        .then(html => {
+            printWindow.document.open();
+            printWindow.document.write(html);
+            printWindow.document.close();
+            printWindow.focus();
+            setTimeout(() => {
+                printWindow.print();
+                printWindow.close();
+            }, 600);
+        })
+        .catch(() => {
+            if (printWindow) printWindow.close();
+            alert('ບໍ່ສາມາດພິມໃບເບີກໄດ້ຕາມເງື່ອນໄຂຂອງລະບົບ');
+        });
+}
+
 function showRequestDetail(id) {
     const data = requestsData[id];
     if (!data) return;
+
+    document.getElementById('detailPrintButton').onclick = function() {
+        printRequestDraft(id);
+    };
 
     let statusBadge = '';
     if (data.status === 'pending') {
@@ -718,6 +986,24 @@ function showRequestDetail(id) {
         `;
     }
 
+    let attachmentsHtml = '';
+    if (data.attachments && data.attachments.length > 0) {
+        const attachmentLinks = data.attachments.map(attachment => `
+            <li class="flex items-center justify-between gap-3 py-2 border-b last:border-b-0">
+                <span class="text-sm text-gray-700 truncate">${escapeHtml(attachment.original_filename)}</span>
+                <a href="view_document.php?attachment_id=${encodeURIComponent(attachment.id)}" target="_blank" rel="noopener" class="text-sm font-medium text-blue-600 hover:text-blue-800 whitespace-nowrap">
+                    <i class="fas fa-eye mr-1"></i>ເບິ່ງ
+                </a>
+            </li>
+        `).join('');
+        attachmentsHtml = `
+            <div>
+                <p class="text-xs font-semibold text-gray-500 uppercase mb-1">ເອກະສານແນບ:</p>
+                <ul class="bg-gray-50 px-3 rounded-lg border">${attachmentLinks}</ul>
+            </div>
+        `;
+    }
+
     const html = `
         <div class="space-y-4 text-left">
             <div class="flex justify-between items-start border-b pb-3">
@@ -727,6 +1013,7 @@ function showRequestDetail(id) {
                         ${statusBadge}
                     </div>
                     <h4 class="text-lg font-bold text-gray-800">${escapeHtml(data.fullname)}</h4>
+                    <p class="text-sm text-indigo-700 mt-1"><i class="fas fa-building mr-1"></i>ພະແນກ: ${escapeHtml(data.department || 'ບໍ່ລະບຸ')}</p>
                 </div>
                 <p class="text-xs text-gray-400">ວັນທີ: ${escapeHtml(data.request_date)}</p>
             </div>
@@ -737,6 +1024,8 @@ function showRequestDetail(id) {
             </div>
 
             ${adminNoteHtml}
+
+            ${attachmentsHtml}
 
             <div>
                 <p class="text-xs font-semibold text-gray-500 uppercase mb-2">ລາຍການອຸປະກອນທີ່ຂໍເບີກ:</p>

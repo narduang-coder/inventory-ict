@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../includes/config.php';
+require_once __DIR__ . '/../includes/attachments.php';
 checkRole(['user']);
 // ============================================================
 // 1. SESSION & INITIALIZATION
@@ -53,13 +54,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['submit_request'])) {
                     $stmtItem->execute([$request_id, $itemId, $qty]);
                 }
             }
+
+            uploadRequestAttachments($_FILES['attachments'] ?? [], $request_id, $user_id);
             
             $pdo->commit();
             if (function_exists('showAlert')) showAlert('ສົ່ງຄຳຂໍເບີກສຳເລັດ! ລໍຖ້າການອະນຸມັດ', 'success');
             if (function_exists('logActivity')) logActivity("ສົ່ງຄຳຂໍເບີກ ID: {$request_id}");
             echo '<script>window.location.href = "?user=myrequests";</script>';
             exit();
-        } catch (PDOException $e) {
+        } catch (RuntimeException $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            if (function_exists('showAlert')) showAlert($e->getMessage(), 'error');
+        } catch (Exception $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
             if (function_exists('showAlert')) showAlert('ເກີດຂໍ້ຜິດພາດ ກະລຸນາລອງໃໝ່', 'error');
         }
@@ -108,7 +114,7 @@ if (isset($pdo)) {
     <?php endif; ?>
 <?php endif; ?>
 
-<form method="POST" id="requestForm" class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+<form method="POST" enctype="multipart/form-data" id="requestForm" class="grid grid-cols-1 lg:grid-cols-12 gap-8">
     <input type="hidden" name="csrf_token" value="<?php echo function_exists('generateCSRFToken') ? generateCSRFToken() : ''; ?>">
     
     <!-- ສ່ວນ Card ສະແດງອຸປະກອນ -->
@@ -243,6 +249,12 @@ if (isset($pdo)) {
                 <div>
                     <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">ໝາຍເຫດ</label>
                     <textarea name="note" rows="2" class="form-input border border-slate-200 rounded-lg w-full p-2" placeholder="ໝາຍເຫດເພີ່ມເຕີມ (ຖ້າມີ)..."></textarea>
+                </div>
+
+                <div>
+                    <label for="requestAttachments" class="block text-xs font-semibold text-slate-600 uppercase mb-1">ເອກະສານແນບ</label>
+                    <input type="file" name="attachments[]" id="requestAttachments" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.csv" class="form-input border border-slate-200 rounded-lg w-full p-2 text-sm">
+                    <p class="text-xs text-slate-400 mt-1">ສູງສຸດ 5 ໄຟລ໌, ໄຟລ໌ລະບໍ່ເກີນ 10 MB</p>
                 </div>
             </div>
 

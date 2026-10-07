@@ -908,6 +908,9 @@ if ($alert): ?>
                                     <button onclick="editItem(<?php echo htmlspecialchars(json_encode($item), ENT_QUOTES, 'UTF-8'); ?>)" class="text-blue-600 hover:text-blue-800 p-1.5 rounded-lg hover:bg-blue-50 transition" title="ແກ້ໄຂ">
                                         <i class="fas fa-edit"></i>
                                     </button>
+                                    <button type="button" onclick="downloadItemBarcode('<?php echo htmlspecialchars($item['barcode'] ?? '', ENT_QUOTES); ?>')" class="text-sky-600 hover:text-sky-800 p-1.5 rounded-lg hover:bg-sky-50 transition" title="ດາວໂຫຼດ Barcode PNG">
+                                        <i class="fas fa-download"></i>
+                                    </button>
                                     <button onclick="printBarcode('<?php echo htmlspecialchars($item['barcode'] ?? ''); ?>', '<?php echo htmlspecialchars($item['name'], ENT_QUOTES); ?>')" class="text-green-600 hover:text-green-800 p-1.5 rounded-lg hover:bg-green-50 transition" title="ພິມ Barcode">
                                         <i class="fas fa-print"></i>
                                     </button>
@@ -1357,9 +1360,30 @@ if ($alert): ?>
     </div>
 </div>
 
+<div id="barcodeModal" class="fixed inset-0 bg-black/50 flex items-center justify-center hidden z-50 p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl text-center">
+        <div class="flex justify-between items-center mb-4 border-b pb-3">
+            <h3 class="text-lg font-bold text-gray-800"><i class="fas fa-barcode text-green-600 mr-2"></i>Barcode (CODE128)</h3>
+            <button type="button" onclick="closeBarcodeModal()" class="text-gray-400 hover:text-gray-600 transition" title="ປິດ">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+        </div>
+        <div class="overflow-x-auto bg-white p-3 border rounded-lg">
+            <svg id="barcodePreview" class="mx-auto max-w-full" role="img" aria-label="Item barcode"></svg>
+        </div>
+        <p id="barcodeItemName" class="mt-3 text-sm text-gray-700 font-medium"></p>
+        <div class="mt-5 flex flex-wrap justify-center gap-2">
+            <button type="button" onclick="downloadBarcode('png')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium"><i class="fas fa-download mr-1"></i>PNG</button>
+            <button type="button" onclick="downloadBarcode('svg')" class="bg-gray-700 hover:bg-gray-800 text-white px-4 py-2 rounded-lg text-sm font-medium"><i class="fas fa-download mr-1"></i>SVG</button>
+            <button type="button" onclick="printBarcodePreview()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium"><i class="fas fa-print mr-1"></i>ພິມ</button>
+        </div>
+    </div>
+</div>
+
 <!-- ============================================================ -->
 <!-- 5. JAVASCRIPT LOGIC -->
 <!-- ============================================================ -->
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 <script>
 let activeStockFilter = 'all';
 
@@ -1754,14 +1778,116 @@ function printQR() {
     printWindow.document.close();
 }
 
+let currentBarcodeValue = '';
+let currentBarcodeName = '';
+
 function printBarcode(barcode, name) {
     if (!barcode) return alert('ບໍ່ມີ Barcode');
-    const printWindow = window.open('', '_blank', 'width=400,height=400');
-    printWindow.document.write(`
-        <!DOCTYPE html><html><head><title>Barcode</title><style>body{font-family:sans-serif;text-align:center;padding:20px;}</style></head>
-        <body><img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(barcode)}" /><p>${name}</p><script>window.onload=function(){window.print();window.close();}<\/script></body></html>
-    `);
-    printWindow.document.close();
+    if (typeof JsBarcode === 'undefined') return alert('ບໍ່ສາມາດໂຫຼດ Barcode generator ໄດ້');
+
+    currentBarcodeValue = barcode;
+    currentBarcodeName = name;
+    try {
+        renderBarcodeSvg('#barcodePreview', barcode);
+        document.getElementById('barcodeItemName').textContent = name;
+        document.getElementById('barcodeModal').classList.remove('hidden');
+    } catch (error) {
+        alert('ສ້າງ Barcode ບໍ່ສຳເລັດ: ' + error.message);
+    }
+}
+
+function renderBarcodeSvg(target, barcode) {
+    JsBarcode(target, barcode, {
+        format: 'CODE128',
+        lineColor: '#000000',
+        width: 2,
+        height: 80,
+        displayValue: true,
+        fontSize: 18,
+        margin: 12
+    });
+    const svg = typeof target === 'string' ? document.querySelector(target) : target;
+    svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    return svg;
+}
+
+function closeBarcodeModal() {
+    document.getElementById('barcodeModal').classList.add('hidden');
+}
+
+function downloadBarcode(format) {
+    downloadBarcodeFile(document.getElementById('barcodePreview'), currentBarcodeValue, format);
+}
+
+function downloadItemBarcode(barcode) {
+    if (!barcode) return alert('ບໍ່ມີ Barcode');
+    if (typeof JsBarcode === 'undefined') return alert('ບໍ່ສາມາດໂຫຼດ Barcode generator ໄດ້');
+
+    try {
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        renderBarcodeSvg(svg, barcode);
+        downloadBarcodeFile(svg, barcode, 'png');
+    } catch (error) {
+        alert('ສ້າງ Barcode ບໍ່ສຳເລັດ: ' + error.message);
+    }
+}
+
+function downloadBarcodeFile(svg, barcode, format) {
+    const svgMarkup = new XMLSerializer().serializeToString(svg);
+    const fileName = 'barcode_' + barcode;
+    const svgBlob = new Blob([svgMarkup], { type: 'image/svg+xml;charset=utf-8' });
+
+    if (format === 'svg') {
+        downloadBlob(svgBlob, fileName + '.svg');
+        return;
+    }
+
+    const objectUrl = URL.createObjectURL(svgBlob);
+    const image = new Image();
+    image.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = image.naturalWidth;
+        canvas.height = image.naturalHeight;
+        canvas.getContext('2d').drawImage(image, 0, 0);
+        canvas.toBlob(blob => {
+            if (blob) downloadBlob(blob, fileName + '.png');
+            URL.revokeObjectURL(objectUrl);
+        }, 'image/png');
+    };
+    image.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        alert('ສ້າງໄຟລ໌ PNG ບໍ່ສຳເລັດ');
+    };
+    image.src = objectUrl;
+}
+
+function downloadBlob(blob, fileName) {
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+}
+
+function printBarcodePreview() {
+    const printWindow = window.open('', '_blank', 'width=600,height=400');
+    if (!printWindow) return alert('ກະລຸນາອະນຸຍາດ popup ເພື່ອພິມ Barcode');
+
+    const printDocument = printWindow.document;
+    printDocument.title = 'Barcode ' + currentBarcodeValue;
+    const style = printDocument.createElement('style');
+    style.textContent = '@page{margin:12mm}body{font-family:Arial,sans-serif;text-align:center;padding:24px;color:#000}svg{max-width:100%;height:auto}';
+    printDocument.head.appendChild(style);
+    printDocument.body.style.cssText = 'font-family:Arial,sans-serif;text-align:center;padding:24px;color:#000';
+    printDocument.body.appendChild(document.getElementById('barcodePreview').cloneNode(true));
+    const name = printDocument.createElement('p');
+    name.textContent = currentBarcodeName;
+    printDocument.body.appendChild(name);
+    printWindow.focus();
+    printWindow.print();
 }
 
 function previewImageFile(input) {
@@ -1807,6 +1933,7 @@ document.getElementById('restockModal').addEventListener('click', function(e) { 
 document.getElementById('deleteModal').addEventListener('click', function(e) { if (e.target === this) closeDeleteModal(); });
 document.getElementById('qrModal').addEventListener('click', function(e) { if (e.target === this) closeQRModal(); });
 document.getElementById('editHistoryModal').addEventListener('click', function(e) { if (e.target === this) closeEditHistoryModal(); });
+document.getElementById('barcodeModal').addEventListener('click', function(e) { if (e.target === this) closeBarcodeModal(); });
 </script>
 
 <style>

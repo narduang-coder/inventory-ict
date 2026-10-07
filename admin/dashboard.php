@@ -60,8 +60,11 @@ $top_users       = function_exists('getTopUsers') ? getTopUsers($pdo) : [];
         <p class="text-slate-500 text-sm mt-0.5">ສະຫຼຸບພາບລວມ ແລະ ສະຖິຕິການນຳໃຊ້ລະບົບ</p>
     </div>
     <div class="flex items-center gap-2">
-        <button onclick="window.print()" class="dashboard-print-button inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-medium rounded-xl text-sm shadow-sm transition">
-            <i class="fas fa-print text-slate-400"></i> ພິມລາຍງານ
+        <button onclick="exportDashboard('excel')" class="dashboard-print-button inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white hover:bg-emerald-700 font-medium rounded-xl text-sm shadow-sm transition">
+            <i class="fas fa-file-excel"></i> Excel
+        </button>
+        <button onclick="exportDashboard('pdf')" class="dashboard-print-button inline-flex items-center gap-2 px-4 py-2 bg-rose-600 text-white hover:bg-rose-700 font-medium rounded-xl text-sm shadow-sm transition">
+            <i class="fas fa-file-pdf"></i> PDF
         </button>
     </div>
 </div>
@@ -308,6 +311,20 @@ $top_users       = function_exists('getTopUsers') ? getTopUsers($pdo) : [];
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
+function exportDashboard(type) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('admin', 'dashboard');
+    url.searchParams.set('export', type);
+    url.searchParams.set('token', <?php echo json_encode(generateCSRFToken()); ?>);
+
+    if (type === 'pdf') {
+        window.open(url.toString(), '_blank');
+        return;
+    }
+
+    window.location.href = url.toString();
+}
+
 if (typeof Chart !== 'undefined') {
     Chart.defaults.font.family = "'Noto Sans Lao', sans-serif";
 }

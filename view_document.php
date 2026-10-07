@@ -7,6 +7,32 @@ checkRole(['admin']);
 $uploadRoot = __DIR__ . DIRECTORY_SEPARATOR . 'assets' . DIRECTORY_SEPARATOR . 'uploads';
 $requestedFile = $_GET['file'] ?? '';
 
+if (isset($_GET['attachment_id'])) {
+    $stmt = $pdo->prepare("SELECT original_filename, file_path, mime_type, file_size, file_data FROM request_attachments WHERE id = ? LIMIT 1");
+    $stmt->execute([(int)$_GET['attachment_id']]);
+    $attachment = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$attachment) {
+        http_response_code(404);
+        exit('Attachment not found.');
+    }
+
+    if ($attachment['file_data'] !== null && $attachment['file_data'] !== '') {
+        $filename = preg_replace('/[\r\n"]+/', '_', basename((string)$attachment['original_filename'])) ?: 'attachment';
+        $inlineTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+        $disposition = in_array($attachment['mime_type'], $inlineTypes, true) ? 'inline' : 'attachment';
+        header('Content-Type: ' . $attachment['mime_type']);
+        header('Content-Disposition: ' . $disposition . '; filename="' . $filename . '"');
+        header("Content-Security-Policy: default-src 'none'; frame-ancestors 'self';");
+        header('Content-Length: ' . (int)$attachment['file_size']);
+        header('Cache-Control: private, no-cache, no-store, must-revalidate, max-age=0');
+        echo $attachment['file_data'];
+        exit;
+    }
+
+    $requestedFile = (string)$attachment['file_path'];
+}
+
 if ($requestedFile === '') {
     http_response_code(400);
     echo 'Missing file parameter.';

@@ -206,6 +206,88 @@ if (!function_exists('uploadItemAttachment')) {
     }
 }
 
+if (!function_exists('uploadRequestAttachments')) {
+    function uploadRequestAttachments($files, $request_id, $user_id) {
+        global $pdo;
+
+        $uploaded_ids = [];
+        $max_files = 5;
+        $max_size = 10 * 1024 * 1024;
+        $allowed_types = [
+            'pdf' => ['application/pdf'],
+            'jpg' => ['image/jpeg'],
+            'jpeg' => ['image/jpeg'],
+            'png' => ['image/png'],
+            'webp' => ['image/webp'],
+            'doc' => ['application/msword', 'application/x-ole-storage'],
+            'docx' => ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/zip'],
+            'xls' => ['application/vnd.ms-excel', 'application/x-ole-storage'],
+            'xlsx' => ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/zip'],
+            'csv' => ['text/csv', 'text/plain', 'application/vnd.ms-excel']
+        ];
+
+        if (!isset($files['name']) || !is_array($files['name'])) {
+            return $uploaded_ids;
+        }
+
+        $file_count = count(array_filter($files['name'], static function ($name) {
+            return $name !== '';
+        }));
+        if ($file_count > $max_files) {
+            throw new RuntimeException('ສາມາດແນບໄຟລ໌ໄດ້ສູງສຸດ 5 ໄຟລ໌');
+        }
+
+        try {
+            foreach ($files['name'] as $index => $original_name) {
+                $error = $files['error'][$index] ?? UPLOAD_ERR_NO_FILE;
+                if ($error === UPLOAD_ERR_NO_FILE) continue;
+                if ($error !== UPLOAD_ERR_OK) {
+                    throw new RuntimeException('ການອັບໂຫຼດໄຟລ໌ບໍ່ສຳເລັດ');
+                }
+
+                $temporary_path = $files['tmp_name'][$index] ?? '';
+                $file_size = (int)($files['size'][$index] ?? 0);
+                if ($file_size <= 0 || $file_size > $max_size || !is_uploaded_file($temporary_path)) {
+                    throw new RuntimeException('ໄຟລ໌ຕ້ອງມີຂະໜາດບໍ່ເກີນ 10 MB');
+                }
+
+                $extension = strtolower(pathinfo((string)$original_name, PATHINFO_EXTENSION));
+                if (!isset($allowed_types[$extension])) {
+                    throw new RuntimeException('ປະເພດໄຟລ໌ນີ້ບໍ່ອະນຸຍາດ');
+                }
+
+                $finfo = finfo_open(FILEINFO_MIME_TYPE);
+                $detected_mime = finfo_file($finfo, $temporary_path);
+                finfo_close($finfo);
+                if (!in_array($detected_mime, $allowed_types[$extension], true)) {
+                    throw new RuntimeException('ປະເພດເນື້ອໃນໄຟລ໌ບໍ່ກົງກັບນາມສະກຸນ');
+                }
+
+                $stored_name = generateSecureFilename($original_name);
+                $file_data = file_get_contents($temporary_path);
+                if ($file_data === false) {
+                    throw new RuntimeException('ອ່ານໄຟລ໌ບໍ່ສຳເລັດ');
+                }
+
+                $stmt = $pdo->prepare("\n                    INSERT INTO request_attachments\n                    (request_id, original_filename, stored_filename, file_path, mime_type, file_size, file_data, uploaded_by, uploaded_at)\n                    VALUES (?, ?, ?, '', ?, ?, ?, ?, NOW())\n                ");
+                $stmt->bindValue(1, (int)$request_id, PDO::PARAM_INT);
+                $stmt->bindValue(2, basename((string)$original_name), PDO::PARAM_STR);
+                $stmt->bindValue(3, $stored_name, PDO::PARAM_STR);
+                $stmt->bindValue(4, $detected_mime, PDO::PARAM_STR);
+                $stmt->bindValue(5, $file_size, PDO::PARAM_INT);
+                $stmt->bindValue(6, $file_data, PDO::PARAM_LOB);
+                $stmt->bindValue(7, (int)$user_id, PDO::PARAM_INT);
+                $stmt->execute();
+                $uploaded_ids[] = (int)$pdo->lastInsertId();
+            }
+        } catch (Throwable $e) {
+            throw $e;
+        }
+
+        return $uploaded_ids;
+    }
+}
+
 /**
  * Get attachments for an item
  */
